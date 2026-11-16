@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import CameraDialog from './CameraDialog';
+import InstaPlate from './InstaPlate';
 import Panel from './Panel';
 import StripCanvas from './StripCanvas';
 import { DEFAULT_SETTINGS, MAX_PHOTOS, slotCount } from '@/lib/options';
@@ -236,6 +237,29 @@ export default function Booth() {
           <p>Turn your photos into a photo booth strip. Nothing leaves this device.</p>
         </header>
 
+        <InstaPlate
+          settings={settings}
+          photos={photos}
+          stickers={stickers}
+          placements={placements}
+          selectedCopy={selectedCopy}
+          canShare={canShare}
+          slots={perStrip}
+          onChange={update}
+          onSelectCopy={setSelectedCopy}
+          onMovePlacement={(copy, x, y) =>
+            setPlacements((list) => {
+              // The strip being moved comes to the front.
+              const p = list.find((q) => q.copy === copy);
+              return p ? [...list.filter((q) => q.copy !== copy), { ...p, x, y }] : list;
+            })
+          }
+          onTilt={(copy, rot) => setPlacements((list) => list.map((p) => (p.copy === copy ? { ...p, rot } : p)))}
+          onResetPlacements={resetPlacements}
+          onSave={(kind) => void save(kind)}
+          onShare={() => void share()}
+        />
+
         <div className="chute" style={{ '--copies': strips.length } as React.CSSProperties}>
           <div className="slot" />
           <div className="prints">
@@ -283,9 +307,6 @@ export default function Booth() {
         photos={photos}
         status={status}
         stickers={stickers}
-        placements={placements}
-        selectedCopy={selectedCopy}
-        canShare={canShare}
         onChange={update}
         onLayout={changeLayout}
         onPickFiles={pickFiles}
@@ -309,21 +330,10 @@ export default function Booth() {
             return next;
           })
         }
-        onSelectCopy={setSelectedCopy}
-        onMovePlacement={(copy, x, y) =>
-          setPlacements((list) => {
-            // The strip being moved comes to the front.
-            const p = list.find((q) => q.copy === copy);
-            return p ? [...list.filter((q) => q.copy !== copy), { ...p, x, y }] : list;
-          })
-        }
-        onTilt={(copy, rot) => setPlacements((list) => list.map((p) => (p.copy === copy ? { ...p, rot } : p)))}
-        onResetPlacements={resetPlacements}
         onRemovePhoto={(i) => setPhotos((list) => list.filter((_, n) => n !== i))}
         onAddSticker={addSticker}
         onClearStickers={() => setStickers([])}
         onSave={(kind) => void save(kind)}
-        onShare={() => void share()}
       />
 
       <CameraDialog

@@ -216,15 +216,27 @@ canvas.strip.is-empty { cursor: pointer; }
 .btn-primary:hover { background: #761822; }
 .btn-download { width: 100%; min-height: 52px; font-size: 17px; }
 
-/* Instagram image: size, live preview, strips, backdrop, then the download */
-.insta {
-  display: grid;
-  gap: 12px;
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1.5px solid rgba(27, 26, 23, 0.16);
+/* Instagram image: an ivory plate on the stage, under the masthead */
+.plate {
+  width: min(100%, 760px);
+  margin: 0 0 24px;
+  padding: 18px 22px 20px;
+  border-radius: 6px;
+  color: var(--ink);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3);
+  /* Two screws holding the plate on, like the control plate */
+  background:
+    radial-gradient(circle at 14px 14px, #c9c3b4 0 4px, rgba(27, 26, 23, 0.45) 4px 5px, transparent 5.5px),
+    radial-gradient(circle at calc(100% - 14px) 14px, #c9c3b4 0 4px, rgba(27, 26, 23, 0.45) 4px 5px, transparent 5.5px),
+    var(--paper);
 }
-.insta h3 { font-size: 16px; font-weight: 600; margin: 0; }
+.plate :focus-visible { outline-color: var(--enamel); }
+.insta h2 { font-size: 19px; font-weight: 600; margin: 0 0 12px; padding-left: 10px; }
+.insta-cols { display: grid; gap: 16px; }
+.insta-view, .insta-controls { display: grid; gap: 12px; align-content: start; min-width: 0; }
+@container (min-width: 640px) {
+  .insta-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; }
+}
 .insta .note { margin: -4px 0 0; }
 .insta .field, .insta .check { margin-top: 0; }
 .insta .choices { margin-bottom: 0; }
