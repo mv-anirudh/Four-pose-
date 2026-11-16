@@ -1,7 +1,34 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { BACKDROPS, FILMS, LAYOUTS, MAX_PHOTOS, PAPERS, STICKERS, slotCount } from '@/lib/options';
-import type { FilmKey, LayoutKey, Photo, SaveKind, Settings, Swatch } from '@/lib/types';
+import { ctx2d, drawSticker } from '@/lib/render';
+import type { FilmKey, LayoutKey, Photo, SaveKind, Settings, StickerKey, Swatch } from '@/lib/types';
+
+/** A small preview drawn with the same code as the strip, so the button shows exactly what gets added. */
+function StickerIcon({ kind }: { kind: StickerKey }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    let alive = true;
+    const paint = () => {
+      const c = ref.current;
+      if (!c || !alive) return;
+      const ctx = ctx2d(c);
+      const dpr = window.devicePixelRatio || 1;
+      c.width = 36 * dpr;
+      c.height = 36 * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 18 * dpr, 18 * dpr);
+      drawSticker(ctx, kind, 26);
+    };
+    paint();
+    // Redraw once the handwriting face has loaded, for the xoxo sticker.
+    void document.fonts?.ready.then(paint);
+    return () => {
+      alive = false;
+    };
+  }, [kind]);
+  return <canvas ref={ref} width={36} height={36} aria-hidden="true" />;
+}
 
 interface Props {
   settings: Settings;
@@ -15,7 +42,7 @@ interface Props {
   onOpenCamera: () => void;
   onMoveEarlier: (index: number) => void;
   onRemovePhoto: (index: number) => void;
-  onAddSticker: (ch: string) => void;
+  onAddSticker: (kind: StickerKey) => void;
   onClearStickers: () => void;
   onSave: (kind: SaveKind) => void;
   onShare: () => void;
@@ -186,9 +213,9 @@ export default function Panel(props: Props) {
       <div className="group">
         <h2>Stickers</h2>
         <div className="stickers">
-          {STICKERS.map((ch) => (
-            <button key={ch} type="button" aria-label={`Add ${ch} sticker`} onClick={() => props.onAddSticker(ch)}>
-              {ch}
+          {STICKERS.map(({ key, label }) => (
+            <button key={key} type="button" title={label} aria-label={`Add ${label} sticker`} onClick={() => props.onAddSticker(key)}>
+              <StickerIcon kind={key} />
             </button>
           ))}
         </div>

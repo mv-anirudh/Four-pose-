@@ -1,4 +1,4 @@
-import type { Film, FilmKey, Layout, LayoutKey, Settings, Swatch } from './types';
+import type { Film, FilmKey, Layout, LayoutKey, Settings, StickerKey, Swatch } from './types';
 
 export const LAYOUTS: Record<LayoutKey, Layout> = {
   strip4: { label: '4 poses', cols: 1, rows: 4, fw: 568, fh: 426 },
@@ -38,7 +38,16 @@ export const BACKDROPS: Swatch[] = [
   { name: 'Black', hex: '#161514' },
 ];
 
-export const STICKERS = ['❤️', '⭐', '🌸', '🎀', '💋', '✨', '🍒', '🦋'];
+// Die-cut paper stickers drawn in render.ts, in the booth palette.
+export const STICKERS: { key: StickerKey; label: string }[] = [
+  { key: 'heart', label: 'Heart' },
+  { key: 'star', label: 'Star' },
+  { key: 'flash', label: 'Flash' },
+  { key: 'sparkle', label: 'Sparkle' },
+  { key: 'crown', label: 'Crown' },
+  { key: 'cherries', label: 'Cherries' },
+  { key: 'xoxo', label: 'XOXO' },
+];
 export const MAX_PHOTOS = 12;
 export const MAX_SIDE = 1800;
 
