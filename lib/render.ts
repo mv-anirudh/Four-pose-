@@ -1,5 +1,5 @@
-import { FILMS, FOOT, GAP, LAYOUTS, MARGIN } from './options';
-import type { Frame, LayoutKey, Photo, SaveKind, Settings, Sticker, StickerKey } from './types';
+import { FILMS, FOOT, FORMATS, GAP, LAYOUTS, MARGIN, MAX_COPIES } from './options';
+import type { Arrangement, Frame, LayoutKey, Photo, Placement, SaveKind, Settings, ShareFormat, Sticker, StickerKey } from './types';
 
 /* All drawing is plain canvas code with no React in it, so it can be tested on its own. */
 
@@ -373,11 +373,94 @@ export function drawSticker(ctx: CanvasRenderingContext2D, kind: StickerKey, siz
   ctx.restore();
 }
 
-/** Places the strip, slightly tilted, on a coloured backdrop at an Instagram size. */
-function composeForInstagram(strip: HTMLCanvasElement, backdrop: string, w: number, h: number): HTMLCanvasElement {
+/* ---------- Instagram image: one or more strips on a backdrop ---------- */
+
+/** Width over height of a strip in the given layout. */
+export function stripAspect(layout: LayoutKey): number {
+  const g = geometry(layout);
+  return g.W / g.H;
+}
+
+/** Starting positions for the strips; the person can drag and tilt them afterwards. */
+export function presetPlacements(copies: number, arrangement: Arrangement, format: ShareFormat, layout: LayoutKey): Placement[] {
+  const { w: W, h: H } = FORMATS[format];
+  const a = stripAspect(layout);
+  const n = Math.max(1, Math.min(MAX_COPIES, Math.round(copies)));
+  const make = (hS: number, spots: [number, number, number][]): Placement[] =>
+    spots.map(([x, y, rot], copy) => ({ copy, x: clamp(x, 0.05, 0.95), y: clamp(y, 0.05, 0.95), rot, h: hS / H }));
+
+  if (n === 1) {
+    return make(Math.min(0.8 * H, (0.8 * W) / a), [[0.5, 0.5, -0.035]]);
+  }
+
+  if (arrangement === 'row') {
+    const gap = 0.04 * W;
+    const hS = Math.min(0.78 * H, (0.88 * W - (n - 1) * gap) / (n * a));
+    const sw = hS * a;
+    const total = n * sw + (n - 1) * gap;
+    const tilts = [-0.02, 0.015, -0.01];
+    return make(
+      hS,
+      Array.from({ length: n }, (_, i) => [((W - total) / 2 + sw / 2 + i * (sw + gap)) / W, 0.5, tilts[i]] as [number, number, number]),
+    );
+  }
+
+  if (arrangement === 'scatter') {
+    const hS = Math.min(0.62 * H, (0.7 * W) / (a * (1 + 0.5 * (n - 1))));
+    const spots: Record<number, [number, number, number][]> = {
+      2: [[0.36, 0.44, -0.1], [0.64, 0.56, 0.08]],
+      3: [[0.3, 0.4, -0.12], [0.7, 0.47, 0.09], [0.47, 0.62, -0.03]],
+    };
+    return make(hS, spots[n]);
+  }
+
+  // Fanned: overlapping like strips held in one hand
+  const step = 0.42;
+  const hS = Math.min(0.74 * H, (0.84 * W) / (a * (1 + step * (n - 1))));
+  const sw = hS * a;
+  const tilts: Record<number, number[]> = { 2: [-0.09, 0.07], 3: [-0.13, 0, 0.11] };
+  return make(
+    hS,
+    Array.from({ length: n }, (_, i) => {
+      const off = i - (n - 1) / 2;
+      return [(W / 2 + off * step * sw) / W, 0.5 + Math.abs(off) * 0.02, tilts[n][i]] as [number, number, number];
+    }),
+  );
+}
+
+/**
+ * Photos for each strip in the Instagram image. With spares on, strip 2 takes
+ * photos 5 to 8 and so on, but only when there are enough to fill it;
+ * otherwise it repeats strip 1, the way a booth prints a duplicate.
+ */
+export function photoSets(photos: Photo[], s: Settings): { photos: Photo[]; duplicate: boolean }[] {
+  const n = LAYOUTS[s.layout].cols * LAYOUTS[s.layout].rows;
+  const first = photos.slice(0, n);
+  return Array.from({ length: s.copies }, (_, i) => {
+    const set = photos.slice(i * n, (i + 1) * n);
+    if (i > 0 && s.useSpares && set.length === n) return { photos: set, duplicate: false };
+    return { photos: first, duplicate: i > 0 };
+  });
+}
+
+/** Draws the full Instagram image at width w and height h. */
+export function renderShare(
+  photos: Photo[],
+  stickers: Sticker[],
+  s: Settings,
+  placements: Placement[],
+  w: number,
+  h: number,
+  stripScale: number,
+): HTMLCanvasElement {
+  // Stickers belong to strip 1's photos, so they repeat only on exact duplicates.
+  const strips = photoSets(photos, s).map((set, i) =>
+    renderStrip(set.photos, i === 0 || set.duplicate ? stickers : [], s, stripScale),
+  );
+
   const c = makeCanvas(w, h);
   const ctx = ctx2d(c);
-  ctx.fillStyle = backdrop;
+  ctx.fillStyle = s.backdrop;
   ctx.fillRect(0, 0, w, h);
   const shade = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.max(w, h) * 0.75);
   shade.addColorStop(0, 'rgba(0, 0, 0, 0)');
@@ -385,23 +468,27 @@ function composeForInstagram(strip: HTMLCanvasElement, backdrop: string, w: numb
   ctx.fillStyle = shade;
   ctx.fillRect(0, 0, w, h);
 
-  const fit = Math.min((w * 0.8) / strip.width, (h * 0.8) / strip.height);
-  const dw = strip.width * fit;
-  const dh = strip.height * fit;
-  ctx.translate(w / 2, h / 2);
-  ctx.rotate(-0.035);
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-  ctx.shadowBlur = 40;
-  ctx.shadowOffsetY = 18;
-  ctx.drawImage(strip, -dw / 2, -dh / 2, dw, dh);
+  for (const p of placements) {
+    const strip = strips[p.copy];
+    if (!strip) continue;
+    const dh = p.h * h;
+    const dw = (dh * strip.width) / strip.height;
+    ctx.save();
+    ctx.translate(p.x * w, p.y * h);
+    ctx.rotate(p.rot);
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 0.037 * w;
+    ctx.shadowOffsetY = 0.017 * w;
+    ctx.drawImage(strip, -dw / 2, -dh / 2, dw, dh);
+    ctx.restore();
+  }
   return c;
 }
 
-export function renderForSave(kind: SaveKind, photos: Photo[], stickers: Sticker[], s: Settings): HTMLCanvasElement {
-  const strip = renderStrip(photos, stickers, s, 2);
-  if (kind === 'story') return composeForInstagram(strip, s.backdrop, 1080, 1920);
-  if (kind === 'post') return composeForInstagram(strip, s.backdrop, 1080, 1350);
-  return strip;
+export function renderForSave(kind: SaveKind, photos: Photo[], stickers: Sticker[], s: Settings, placements: Placement[]): HTMLCanvasElement {
+  if (kind === 'strip') return renderStrip(photos, stickers, s, 2);
+  const f = FORMATS[kind];
+  return renderShare(photos, stickers, s, placements, f.w, f.h, 2);
 }
 
 export function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {

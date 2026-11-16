@@ -114,6 +114,28 @@ body {
 #strip:active { cursor: grabbing; }
 #strip.is-empty { cursor: pointer; }
 
+/* Holds the strip and the pick-up overlays in the same coordinate box */
+.strip-holder { position: relative; display: block; max-width: 100%; }
+.strip-holder.is-lifting #strip { cursor: grabbing; }
+.frame-mark {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 2px;
+}
+.frame-from { background: rgba(14, 48, 43, 0.55); outline: 2px dashed var(--lamp); outline-offset: -2px; }
+.frame-over { outline: 4px solid var(--lamp); outline-offset: -4px; background: rgba(233, 174, 63, 0.18); }
+/* The photo you are holding, lifted off the strip like a loose print */
+.lifted {
+  position: absolute;
+  pointer-events: none;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border: 5px solid var(--paper);
+  transform: translate(-50%, -50%) rotate(-4deg) scale(1.04);
+  box-shadow: 0 16px 24px rgba(0, 0, 0, 0.45);
+  z-index: 3;
+}
+
 .strip-wrap.is-printing { animation: print 1.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 @keyframes print {
   from { transform: translateY(-102%); }
@@ -181,20 +203,55 @@ body {
 .btn-primary:hover { background: #761822; }
 .btn-download { width: 100%; min-height: 52px; font-size: 17px; }
 
-/* Instagram sizes: backdrop and the two exports it applies to, kept together */
+/* Instagram image: size, live preview, strips, backdrop, then the download */
 .insta {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   margin-top: 18px;
   padding-top: 16px;
   border-top: 1.5px solid rgba(27, 26, 23, 0.16);
 }
 .insta h3 { font-size: 16px; font-weight: 600; margin: 0; }
-.insta .note { margin: 0; }
-.insta-sizes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.insta-sizes .btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; line-height: 1.2; white-space: nowrap; padding-inline: 8px; }
+.insta .note { margin: -4px 0 0; }
+.insta .field, .insta .check { margin-top: 0; }
+.insta .choices { margin-bottom: 0; }
 .ratio { font-weight: 400; font-size: 13px; opacity: 0.7; font-variant-numeric: tabular-nums; }
+.insta-actions { display: flex; gap: 8px; }
+.btn-wide { flex: 1; }
 .insta .btn-quiet { justify-self: start; min-height: 36px; }
+
+/* The sample-photo window on the outside of the booth: a steel frame around glass */
+.window {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--chrome);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.window-glass {
+  position: relative;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--enamel-deep);
+  box-shadow: inset 0 0 0 3px var(--enamel-deep);
+}
+.window-glass canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+.window-glass canvas:active { cursor: grabbing; }
+.window-pick {
+  position: absolute;
+  pointer-events: none;
+  outline: 2px dashed var(--lamp);
+  outline-offset: 3px;
+}
+.btn-quiet { justify-self: start; min-height: 36px; }
 .btn-quiet { border-color: transparent; text-decoration: underline; padding-left: 0; }
 .btn[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 
@@ -250,7 +307,45 @@ body {
   border-radius: 4px;
   border: 1.5px solid var(--ink);
 }
+.tray img {
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
 .tray li.is-spare img { opacity: 0.45; }
+.tray-num {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  min-width: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.tray li.is-spare .tray-num { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); line-height: 17px; }
+.tray.is-lifting img { cursor: grabbing; }
+.tray li.is-from img { opacity: 0.25; border-style: dashed; }
+.tray li.is-over img { outline: 3px solid var(--curtain); outline-offset: 2px; }
+.tray-ghost {
+  position: fixed;
+  width: 72px;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border: 4px solid #fbf8f1;
+  box-shadow: 0 12px 20px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -60%) rotate(-5deg);
+  pointer-events: none;
+  z-index: 20;
+}
 .tray .tray-actions { display: flex; gap: 4px; margin-top: 4px; }
 .tray .tray-actions button {
   flex: 1;
@@ -266,6 +361,15 @@ body {
 }
 .tray .tray-actions button:hover { background: rgba(27, 26, 23, 0.1); }
 .tray .tray-actions button:disabled { opacity: 0.3; cursor: default; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 
 .stickers { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
 .stickers button {

@@ -6,8 +6,8 @@ import Panel from './Panel';
 import StripCanvas from './StripCanvas';
 import { DEFAULT_SETTINGS, MAX_PHOTOS, slotCount } from '@/lib/options';
 import { loadFile, newId } from '@/lib/photos';
-import { canvasToBlob, clamp, geometry, renderForSave, todayISO } from '@/lib/render';
-import type { LayoutKey, Photo, SaveKind, Settings, Sticker, StickerKey } from '@/lib/types';
+import { canvasToBlob, clamp, geometry, presetPlacements, renderForSave, todayISO } from '@/lib/render';
+import type { LayoutKey, Photo, Placement, SaveKind, Settings, Sticker, StickerKey } from '@/lib/types';
 
 const fileName = (kind: SaveKind) => `four-poses-${kind}-${todayISO()}.png`;
 
@@ -20,6 +20,10 @@ export default function Booth() {
   const [camOpen, setCamOpen] = useState(false);
   const [canShare, setCanShare] = useState(false);
   const [dropping, setDropping] = useState(false);
+  const [placements, setPlacements] = useState<Placement[]>(() =>
+    presetPlacements(DEFAULT_SETTINGS.copies, DEFAULT_SETTINGS.arrangement, DEFAULT_SETTINGS.format, DEFAULT_SETTINGS.layout),
+  );
+  const [selectedCopy, setSelectedCopy] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const pickFiles = useCallback(() => fileInput.current?.click(), []);
 
@@ -30,6 +34,16 @@ export default function Booth() {
   }, [photos]);
 
   const update = useCallback((patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch })), []);
+
+  // A new size, strip count, arrangement or layout starts from a fresh arrangement.
+  const { copies, arrangement, format, layout } = settings;
+  const resetPlacements = useCallback(() => {
+    setPlacements(presetPlacements(copies, arrangement, format, layout));
+    setSelectedCopy(0);
+  }, [copies, arrangement, format, layout]);
+  useEffect(() => {
+    resetPlacements();
+  }, [resetPlacements]);
 
   // Browser-only setup: today's date and whether this device can share files.
   useEffect(() => {
@@ -132,7 +146,7 @@ export default function Booth() {
       setStatus('Add a photo first, then download.');
       return;
     }
-    const blob = await canvasToBlob(renderForSave(kind, photos, stickers, settings));
+    const blob = await canvasToBlob(renderForSave(kind, photos, stickers, settings, placements));
     if (!blob) {
       setStatus("The image couldn't be made. Try a smaller layout or fewer effects.");
       return;
@@ -153,13 +167,13 @@ export default function Booth() {
       setStatus('Add a photo first, then share.');
       return;
     }
-    const blob = await canvasToBlob(renderForSave('story', photos, stickers, settings));
+    const blob = await canvasToBlob(renderForSave(settings.format, photos, stickers, settings, placements));
     if (!blob) {
       setStatus("The image couldn't be made. Try a smaller layout or fewer effects.");
       return;
     }
     try {
-      await navigator.share({ files: [new File([blob], fileName('story'), { type: 'image/png' })], title: 'Photo strip' });
+      await navigator.share({ files: [new File([blob], fileName(settings.format), { type: 'image/png' })], title: 'Photo strip' });
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) {
         setStatus("Sharing didn't work here. Download the image and share it from your gallery.");
@@ -200,6 +214,13 @@ export default function Booth() {
             stickers={stickers}
             settings={settings}
             onPanPhoto={(index, ox, oy) => setPhotos((list) => list.map((p, i) => (i === index ? { ...p, ox, oy } : p)))}
+            onSwapPhotos={(from, to) =>
+              setPhotos((list) => {
+                const next = [...list];
+                [next[from], next[to]] = [next[to], next[from]];
+                return next;
+              })
+            }
             onMoveSticker={(id, x, y) => setStickers((list) => list.map((s) => (s.id === id ? { ...s, x, y } : s)))}
             onRemoveSticker={(id) => setStickers((list) => list.filter((s) => s.id !== id))}
             onEmptyFrame={pickFiles}
@@ -209,7 +230,7 @@ export default function Booth() {
         <p className="hint">
           {photos.length === 0
             ? 'Click an empty frame to add photos, or drop them anywhere on the page.'
-            : 'Drag a photo inside its frame to re-centre it. Drag stickers to move them, double-click one to remove it.'}
+            : 'Drag a photo to re-centre it. Hold a photo, then drop it on another frame to swap them. Drag stickers to move them, double-click one to remove it.'}
         </p>
         <input
           ref={fileInput}
@@ -229,7 +250,9 @@ export default function Booth() {
         settings={settings}
         photos={photos}
         status={status}
-        stickerCount={stickers.length}
+        stickers={stickers}
+        placements={placements}
+        selectedCopy={selectedCopy}
         canShare={canShare}
         onChange={update}
         onLayout={changeLayout}
@@ -246,6 +269,24 @@ export default function Booth() {
             return next;
           })
         }
+        onMovePhoto={(from, to) =>
+          setPhotos((list) => {
+            const next = [...list];
+            const [moved] = next.splice(from, 1);
+            next.splice(to, 0, moved);
+            return next;
+          })
+        }
+        onSelectCopy={setSelectedCopy}
+        onMovePlacement={(copy, x, y) =>
+          setPlacements((list) => {
+            // The strip being moved comes to the front.
+            const p = list.find((q) => q.copy === copy);
+            return p ? [...list.filter((q) => q.copy !== copy), { ...p, x, y }] : list;
+          })
+        }
+        onTilt={(copy, rot) => setPlacements((list) => list.map((p) => (p.copy === copy ? { ...p, rot } : p)))}
+        onResetPlacements={resetPlacements}
         onRemovePhoto={(i) => setPhotos((list) => list.filter((_, n) => n !== i))}
         onAddSticker={addSticker}
         onClearStickers={() => setStickers([])}
