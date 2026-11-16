@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import CameraDialog from './CameraDialog';
 import Panel from './Panel';
+import PrintCopy from './PrintCopy';
 import StripCanvas from './StripCanvas';
 import { DEFAULT_SETTINGS, MAX_PHOTOS, slotCount } from '@/lib/options';
 import { loadFile, newId } from '@/lib/photos';
-import { canvasToBlob, clamp, geometry, presetPlacements, renderForSave, todayISO } from '@/lib/render';
+import { canvasToBlob, clamp, geometry, photoSets, presetPlacements, renderForSave, todayISO } from '@/lib/render';
 import type { LayoutKey, Photo, Placement, SaveKind, Settings, Sticker, StickerKey } from '@/lib/types';
 
 const fileName = (kind: SaveKind) => `four-poses-${kind}-${todayISO()}.png`;
@@ -181,6 +182,20 @@ export default function Booth() {
     }
   };
 
+  // Extra strips from the Strips setting drop out beside strip 1 once there are photos,
+  // using the same photo sets as the Instagram image (stickers only repeat on exact copies).
+  const perStrip = slotCount(settings.layout);
+  const extraStrips = photos.length
+    ? photoSets(photos, settings)
+        .slice(1)
+        .map((set, i) => ({
+          ...set,
+          caption: set.duplicate
+            ? `Strip ${i + 2} · copy of strip 1`
+            : `Strip ${i + 2} · photos ${(i + 1) * perStrip + 1}–${(i + 2) * perStrip}`,
+        }))
+    : [];
+
   const closeCamera = useCallback(() => setCamOpen(false), []);
   const cameraError = useCallback((message: string) => {
     setCamOpen(false);
@@ -205,26 +220,40 @@ export default function Booth() {
           <p>Turn your photos into a photo booth strip. Nothing leaves this device.</p>
         </header>
 
-        <div className="chute">
+        <div className="chute" style={{ '--copies': extraStrips.length + 1 } as React.CSSProperties}>
           <div className="slot" />
-          <StripCanvas
-            key={printKey}
-            animate={printKey > 0}
-            photos={photos}
-            stickers={stickers}
-            settings={settings}
-            onPanPhoto={(index, ox, oy) => setPhotos((list) => list.map((p, i) => (i === index ? { ...p, ox, oy } : p)))}
-            onSwapPhotos={(from, to) =>
-              setPhotos((list) => {
-                const next = [...list];
-                [next[from], next[to]] = [next[to], next[from]];
-                return next;
-              })
-            }
-            onMoveSticker={(id, x, y) => setStickers((list) => list.map((s) => (s.id === id ? { ...s, x, y } : s)))}
-            onRemoveSticker={(id) => setStickers((list) => list.filter((s) => s.id !== id))}
-            onEmptyFrame={pickFiles}
-          />
+          <div className="prints">
+            <figure className="print">
+              <StripCanvas
+                key={printKey}
+                animate={printKey > 0}
+                photos={photos}
+                stickers={stickers}
+                settings={settings}
+                onPanPhoto={(index, ox, oy) => setPhotos((list) => list.map((p, i) => (i === index ? { ...p, ox, oy } : p)))}
+                onSwapPhotos={(from, to) =>
+                  setPhotos((list) => {
+                    const next = [...list];
+                    [next[from], next[to]] = [next[to], next[from]];
+                    return next;
+                  })
+                }
+                onMoveSticker={(id, x, y) => setStickers((list) => list.map((s) => (s.id === id ? { ...s, x, y } : s)))}
+                onRemoveSticker={(id) => setStickers((list) => list.filter((s) => s.id !== id))}
+                onEmptyFrame={pickFiles}
+              />
+              {extraStrips.length > 0 && <figcaption>Strip 1 · edit this one</figcaption>}
+            </figure>
+            {extraStrips.map((set, i) => (
+              <PrintCopy
+                key={`${printKey}-${i}`}
+                photos={set.photos}
+                stickers={set.duplicate ? stickers : []}
+                settings={settings}
+                caption={set.caption}
+              />
+            ))}
+          </div>
         </div>
 
         <p className="hint">
