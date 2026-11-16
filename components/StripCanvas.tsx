@@ -10,6 +10,8 @@ interface Props {
   settings: Settings;
   /** Plays the "strip drops out of the slot" animation when this mounts. */
   animate: boolean;
+  /** Accessible name, such as "Strip 2, photos 5 to 8". */
+  label?: string;
   onPanPhoto: (index: number, ox: number, oy: number) => void;
   onSwapPhotos: (from: number, to: number) => void;
   onMoveSticker: (id: number, x: number, y: number) => void;
@@ -42,6 +44,7 @@ export default function StripCanvas({
   stickers,
   settings,
   animate,
+  label = 'Preview of your photo strip',
   onPanPhoto,
   onSwapPhotos,
   onMoveSticker,
@@ -186,12 +189,11 @@ export default function StripCanvas({
       <div className={lift ? 'strip-holder is-lifting' : 'strip-holder'}>
         <canvas
           ref={canvasRef}
-          id="strip"
-          className={photos.length < g.frames.length ? 'is-empty' : undefined}
+          className={photos.length < g.frames.length ? 'strip is-empty' : 'strip'}
           style={{ '--strip-w': g.W, '--strip-h': g.H } as React.CSSProperties}
           width={g.W}
           height={g.H}
-          aria-label="Preview of your photo strip"
+          aria-label={label}
           onContextMenu={(e) => e.preventDefault()}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}

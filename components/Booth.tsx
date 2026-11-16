@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import CameraDialog from './CameraDialog';
 import Panel from './Panel';
-import PrintCopy from './PrintCopy';
 import StripCanvas from './StripCanvas';
 import { DEFAULT_SETTINGS, MAX_PHOTOS, slotCount } from '@/lib/options';
 import { loadFile, newId } from '@/lib/photos';
@@ -182,19 +181,36 @@ export default function Booth() {
     }
   };
 
-  // Extra strips from the Strips setting drop out beside strip 1 once there are photos,
-  // using the same photo sets as the Instagram image (stickers only repeat on exact copies).
+  // Every strip from the Strips setting is shown on the stage and can be edited there.
+  // A strip of spare photos edits those photos; a copy of strip 1 edits strip 1's photos,
+  // so the copy and strip 1 always match (stickers only belong to strip 1 and its copies).
   const perStrip = slotCount(settings.layout);
-  const extraStrips = photos.length
-    ? photoSets(photos, settings)
-        .slice(1)
-        .map((set, i) => ({
-          ...set,
-          caption: set.duplicate
-            ? `Strip ${i + 2} · copy of strip 1`
-            : `Strip ${i + 2} · photos ${(i + 1) * perStrip + 1}–${(i + 2) * perStrip}`,
-        }))
-    : [];
+  const strips = (photos.length ? photoSets(photos, settings) : [{ photos, duplicate: false }]).map((set, i) => {
+    const spare = i > 0 && !set.duplicate;
+    return {
+      photos: set.photos,
+      offset: spare ? i * perStrip : 0,
+      stickers: spare ? [] : stickers,
+      caption:
+        i === 0
+          ? 'Strip 1'
+          : spare
+            ? `Strip ${i + 1} · photos ${i * perStrip + 1}–${(i + 1) * perStrip}`
+            : `Strip ${i + 1} · copy of strip 1, edits change both`,
+    };
+  });
+
+  const panPhoto = (index: number, ox: number, oy: number) =>
+    setPhotos((list) => list.map((p, i) => (i === index ? { ...p, ox, oy } : p)));
+  const swapPhotos = (from: number, to: number) =>
+    setPhotos((list) => {
+      const next = [...list];
+      [next[from], next[to]] = [next[to], next[from]];
+      return next;
+    });
+  const moveSticker = (id: number, x: number, y: number) =>
+    setStickers((list) => list.map((s) => (s.id === id ? { ...s, x, y } : s)));
+  const removeSticker = (id: number) => setStickers((list) => list.filter((s) => s.id !== id));
 
   const closeCamera = useCallback(() => setCamOpen(false), []);
   const cameraError = useCallback((message: string) => {
@@ -220,38 +236,25 @@ export default function Booth() {
           <p>Turn your photos into a photo booth strip. Nothing leaves this device.</p>
         </header>
 
-        <div className="chute" style={{ '--copies': extraStrips.length + 1 } as React.CSSProperties}>
+        <div className="chute" style={{ '--copies': strips.length } as React.CSSProperties}>
           <div className="slot" />
           <div className="prints">
-            <figure className="print">
-              <StripCanvas
-                key={printKey}
-                animate={printKey > 0}
-                photos={photos}
-                stickers={stickers}
-                settings={settings}
-                onPanPhoto={(index, ox, oy) => setPhotos((list) => list.map((p, i) => (i === index ? { ...p, ox, oy } : p)))}
-                onSwapPhotos={(from, to) =>
-                  setPhotos((list) => {
-                    const next = [...list];
-                    [next[from], next[to]] = [next[to], next[from]];
-                    return next;
-                  })
-                }
-                onMoveSticker={(id, x, y) => setStickers((list) => list.map((s) => (s.id === id ? { ...s, x, y } : s)))}
-                onRemoveSticker={(id) => setStickers((list) => list.filter((s) => s.id !== id))}
-                onEmptyFrame={pickFiles}
-              />
-              {extraStrips.length > 0 && <figcaption>Strip 1 · edit this one</figcaption>}
-            </figure>
-            {extraStrips.map((set, i) => (
-              <PrintCopy
-                key={`${printKey}-${i}`}
-                photos={set.photos}
-                stickers={set.duplicate ? stickers : []}
-                settings={settings}
-                caption={set.caption}
-              />
+            {strips.map((strip, i) => (
+              <figure className="print" key={i === 0 ? `strip-${printKey}` : `strip-${printKey}-${i}`}>
+                <StripCanvas
+                  animate={i > 0 || printKey > 0}
+                  label={strips.length > 1 ? strip.caption : undefined}
+                  photos={strip.photos}
+                  stickers={strip.stickers}
+                  settings={settings}
+                  onPanPhoto={(index, ox, oy) => panPhoto(index + strip.offset, ox, oy)}
+                  onSwapPhotos={(from, to) => swapPhotos(from + strip.offset, to + strip.offset)}
+                  onMoveSticker={moveSticker}
+                  onRemoveSticker={removeSticker}
+                  onEmptyFrame={pickFiles}
+                />
+                {strips.length > 1 && <figcaption>{strip.caption}</figcaption>}
+              </figure>
             ))}
           </div>
         </div>

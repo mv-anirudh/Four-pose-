@@ -112,7 +112,7 @@ body {
  * Every strip is sized from its height so the slot above can hug the real width.
  * --fit-h is the tallest a strip can be while all of them (--copies) fit across the stage.
  */
-#strip, .print-copy {
+canvas.strip {
   --fit-h: calc((100cqw - 24px - (var(--copies, 1) - 1) * 16px) / var(--copies, 1) * var(--strip-h) / var(--strip-w));
   display: block;
   height: min(calc(100vh - 230px), calc(520px * var(--strip-h) / var(--strip-w)), var(--fit-h));
@@ -120,16 +120,16 @@ body {
   width: auto;
   max-width: 100%;
 }
-#strip {
+canvas.strip {
   touch-action: none;
   cursor: grab;
 }
-#strip:active { cursor: grabbing; }
-#strip.is-empty { cursor: pointer; }
+canvas.strip:active { cursor: grabbing; }
+canvas.strip.is-empty { cursor: pointer; }
 
 /* Holds the strip and the pick-up overlays in the same coordinate box */
 .strip-holder { position: relative; display: block; max-width: 100%; }
-.strip-holder.is-lifting #strip { cursor: grabbing; }
+.strip-holder.is-lifting canvas.strip { cursor: grabbing; }
 .frame-mark {
   position: absolute;
   pointer-events: none;
@@ -437,7 +437,7 @@ body {
   .sign { padding: 10px 0; }
   .sign span { writing-mode: horizontal-tb; font-size: 30px; position: static; letter-spacing: 0.2em; }
   .stage { padding: 20px 14px 24px; }
-  #strip, .print-copy { height: min(68vh, calc(78vw * var(--strip-h) / var(--strip-w)), var(--fit-h)); }
+  canvas.strip { height: min(68vh, calc(78vw * var(--strip-h) / var(--strip-w)), var(--fit-h)); }
   .prints { gap: 10px; }
   .print figcaption { font-size: 12px; }
   .panel { position: static; max-height: none; }
