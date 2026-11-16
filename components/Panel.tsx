@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { BACKDROPS, FILMS, LAYOUTS, MAX_PHOTOS, PAPERS, STICKERS, slotCount } from '@/lib/options';
+import { ARRANGEMENTS, BACKDROPS, FILMS, FORMATS, LAYOUTS, MAX_COPIES, MAX_PHOTOS, PAPERS, STICKERS, slotCount } from '@/lib/options';
 import { ctx2d, drawSticker } from '@/lib/render';
-import type { FilmKey, LayoutKey, Photo, SaveKind, Settings, StickerKey, Swatch } from '@/lib/types';
+import { photoSets } from '@/lib/render';
+import type { Arrangement, FilmKey, LayoutKey, Photo, Placement, SaveKind, Settings, ShareFormat, Sticker, StickerKey, Swatch } from '@/lib/types';
+import SharePreview from './SharePreview';
+import Tray from './Tray';
 
 /** A small preview drawn with the same code as the strip, so the button shows exactly what gets added. */
 function StickerIcon({ kind }: { kind: StickerKey }) {
@@ -34,13 +37,20 @@ interface Props {
   settings: Settings;
   photos: Photo[];
   status: string;
-  stickerCount: number;
+  stickers: Sticker[];
+  placements: Placement[];
+  selectedCopy: number;
   canShare: boolean;
   onChange: (patch: Partial<Settings>) => void;
   onLayout: (layout: LayoutKey) => void;
   onPickFiles: () => void;
   onOpenCamera: () => void;
   onMoveEarlier: (index: number) => void;
+  onMovePhoto: (from: number, to: number) => void;
+  onSelectCopy: (copy: number) => void;
+  onMovePlacement: (copy: number, x: number, y: number) => void;
+  onTilt: (copy: number, rot: number) => void;
+  onResetPlacements: () => void;
   onRemovePhoto: (index: number) => void;
   onAddSticker: (kind: StickerKey) => void;
   onClearStickers: () => void;
@@ -68,13 +78,13 @@ function Swatches({ list, value, onPick }: { list: Swatch[]; value: string; onPi
 }
 
 function trayNote(count: number, slots: number): string {
-  if (count === 0) return `Add up to ${MAX_PHOTOS} photos. The first ones fill the strip.`;
+  if (count === 0) return `Add up to ${MAX_PHOTOS} photos. The first ${slots} fill the strip.`;
   const spare = count - slots;
   if (spare > 0) {
-    return `This layout uses the first ${slots}. The ${spare} faded ${spare === 1 ? 'photo is' : 'photos are'} spare. Move one earlier to use it.`;
+    return `The first ${slots} are on the strip. Spare photos can fill extra strips in your Instagram image. Hold a photo and drag it to change its place.`;
   }
   if (count < slots) return `This layout has room for ${slots - count} more.`;
-  return 'The strip is full.';
+  return 'The strip is full. Hold a photo and drag it to change its place.';
 }
 
 const SLIDERS: { key: 'grain' | 'vignette' | 'leak' | 'wear'; label: string }[] = [
@@ -105,29 +115,13 @@ export default function Panel(props: Props) {
           </button>
         </div>
         <p className="note">{trayNote(photos.length, slots)}</p>
-        <ul className="tray">
-          {photos.map((p, i) => (
-            <li key={p.id} className={i >= slots ? 'is-spare' : undefined}>
-              {/* Thumbnails are small data URLs made in the browser, so next/image adds nothing here. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.thumb} alt={i < slots ? `Photo ${i + 1}, in the strip` : `Photo ${i + 1}, not in the strip`} />
-              <div className="tray-actions">
-                <button
-                  type="button"
-                  title="Move earlier"
-                  aria-label={`Move photo ${i + 1} earlier`}
-                  disabled={i === 0}
-                  onClick={() => props.onMoveEarlier(i)}
-                >
-                  ‹
-                </button>
-                <button type="button" title="Remove" aria-label={`Remove photo ${i + 1}`} onClick={() => props.onRemovePhoto(i)}>
-                  ×
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <Tray
+          photos={photos}
+          slots={slots}
+          onMove={props.onMovePhoto}
+          onMoveEarlier={props.onMoveEarlier}
+          onRemove={props.onRemovePhoto}
+        />
         <div className="field field-stack" role="group" aria-labelledby="countdown-label">
           <span id="countdown-label">Camera countdown</span>
           <div className="choices">
@@ -219,7 +213,7 @@ export default function Panel(props: Props) {
             </button>
           ))}
         </div>
-        {props.stickerCount > 0 && (
+        {props.stickers.length > 0 && (
           <button className="btn btn-quiet" type="button" onClick={props.onClearStickers}>
             Remove all stickers
           </button>
@@ -227,30 +221,119 @@ export default function Panel(props: Props) {
       </div>
 
       <div className="group group-save">
-        <h2>Save</h2>
+        <h2>Save and share</h2>
         <button className="btn btn-primary btn-download" type="button" onClick={() => props.onSave('strip')}>
           Download strip
         </button>
 
         <div className="insta" role="group" aria-labelledby="insta-label">
-          <h3 id="insta-label">For Instagram</h3>
-          <p className="note">The strip sits on a backdrop. Pick its colour, then a size.</p>
-          <Swatches list={BACKDROPS} value={settings.backdrop} onPick={(backdrop) => onChange({ backdrop })} />
-          <div className="insta-sizes">
-            <button className="btn" type="button" onClick={() => props.onSave('story')}>
-              Download Story <span className="ratio">9:16</span>
-            </button>
-            <button className="btn" type="button" onClick={() => props.onSave('post')}>
-              Download post <span className="ratio">4:5</span>
-            </button>
+          <h3 id="insta-label">Instagram image</h3>
+
+          <div className="choices" role="group" aria-label="Image size">
+            {(Object.keys(FORMATS) as ShareFormat[]).map((key) => (
+              <button key={key} type="button" className="btn" aria-pressed={settings.format === key} onClick={() => onChange({ format: key })}>
+                {FORMATS[key].label} <span className="ratio">{FORMATS[key].ratio}</span>
+              </button>
+            ))}
           </div>
-          {props.canShare && (
-            <button className="btn btn-quiet" type="button" onClick={props.onShare}>
-              Share Story
-            </button>
+
+          <SharePreview
+            photos={photos}
+            stickers={props.stickers}
+            settings={settings}
+            placements={props.placements}
+            selected={props.selectedCopy}
+            onSelect={props.onSelectCopy}
+            onMove={props.onMovePlacement}
+          />
+          <p className="note">{settings.copies > 1 ? 'Drag a strip to move it. The outlined strip is the one Tilt changes.' : 'Drag the strip to move it.'}</p>
+
+          <div className="field field-stack" role="group" aria-labelledby="copies-label">
+            <span id="copies-label">Strips</span>
+            <div className="choices">
+              {Array.from({ length: MAX_COPIES }, (_, i) => i + 1).map((n) => (
+                <button key={n} type="button" className="btn" aria-pressed={settings.copies === n} onClick={() => onChange({ copies: n })}>
+                  {n === 1 ? '1 strip' : `${n} strips`}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {settings.copies > 1 && (
+            <div className="field field-stack" role="group" aria-labelledby="arrange-label">
+              <span id="arrange-label">Arrangement</span>
+              <div className="choices">
+                {(Object.keys(ARRANGEMENTS) as Arrangement[]).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className="btn"
+                    aria-pressed={settings.arrangement === key}
+                    onClick={() => onChange({ arrangement: key })}
+                  >
+                    {ARRANGEMENTS[key]}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
+
+          {settings.copies > 1 && (
+            <label className="check">
+              <input type="checkbox" checked={settings.useSpares} onChange={(e) => onChange({ useSpares: e.target.checked })} />
+              <span>{spareNote(photos, settings, slots)}</span>
+            </label>
+          )}
+
+          <TiltField placements={props.placements} selected={props.selectedCopy} onTilt={props.onTilt} />
+
+          <div className="field field-stack">
+            <span>Backdrop</span>
+            <Swatches list={BACKDROPS} value={settings.backdrop} onPick={(backdrop) => onChange({ backdrop })} />
+          </div>
+
+          <div className="insta-actions">
+            <button className="btn btn-wide" type="button" onClick={() => props.onSave(settings.format)}>
+              Download {FORMATS[settings.format].label.toLowerCase()} <span className="ratio">{FORMATS[settings.format].ratio}</span>
+            </button>
+            {props.canShare && (
+              <button className="btn" type="button" onClick={props.onShare}>
+                Share
+              </button>
+            )}
+          </div>
+          <button className="btn btn-quiet" type="button" onClick={props.onResetPlacements}>
+            Reset arrangement
+          </button>
         </div>
       </div>
     </section>
+  );
+}
+
+function spareNote(photos: Photo[], settings: Settings, slots: number): string {
+  const sets = photoSets(photos, { ...settings, useSpares: true });
+  const filled = sets.filter((x, i) => i > 0 && !x.duplicate).length;
+  if (filled === 0) return `Use spare photos on extra strips (add ${slots} more to fill strip 2)`;
+  return `Use spare photos on extra strips (${filled} of ${settings.copies - 1} can be filled)`;
+}
+
+function TiltField({ placements, selected, onTilt }: { placements: Placement[]; selected: number; onTilt: (copy: number, rot: number) => void }) {
+  const p = placements.find((x) => x.copy === selected) ?? placements[0];
+  if (!p) return null;
+  const deg = Math.round((p.rot * 180) / Math.PI);
+  return (
+    <label className="field">
+      <span>{placements.length > 1 ? `Tilt strip ${p.copy + 1}` : 'Tilt'}</span>
+      <input
+        type="range"
+        min={-20}
+        max={20}
+        step={1}
+        value={deg}
+        aria-valuetext={`${deg} degrees`}
+        onChange={(e) => onTilt(p.copy, (Number(e.target.value) * Math.PI) / 180)}
+      />
+    </label>
   );
 }

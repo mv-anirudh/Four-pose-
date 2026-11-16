@@ -27,7 +27,9 @@ Other commands:
 - Paper colours, handwritten caption, typewriter date stamp
 - Emoji stickers (drag to move, double-click to remove)
 - Drag a photo inside its frame to re-centre the crop
-- Download the strip, a 9:16 Story (1080 x 1920) or a 4:5 post (1080 x 1350); Share button on phones
+- Hold a photo on the strip and drop it on another frame to swap them; hold a photo in the tray and drop it on another slot to move it
+- Download the plain strip
+- Instagram image (Story 9:16 or post 4:5) with 1 to 3 strips, fanned, side by side or scattered; drag strips in the preview window to place them, tilt each one, and let spare photos fill the extra strips; Share button on phones
 
 ## Structure
 
@@ -41,6 +43,8 @@ components/
   StripCanvas.tsx   live preview canvas; drag to pan photos and move stickers
   Panel.tsx         the settings panel
   CameraDialog.tsx  camera, countdown and capture
+  Tray.tsx          photo thumbnails; hold and drag to reorder
+  SharePreview.tsx  the display window: live, draggable Instagram preview
 lib/
   types.ts          shared types
   options.ts        layouts, films, colours, limits, default settings

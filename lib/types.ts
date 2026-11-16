@@ -1,6 +1,8 @@
 export type LayoutKey = 'strip4' | 'strip3' | 'strip2' | 'grid4' | 'single';
 export type FilmKey = 'silver' | 'sepia' | 'faded' | 'drugstore' | 'carnival' | 'none';
 export type SaveKind = 'strip' | 'story' | 'post';
+export type ShareFormat = 'story' | 'post';
+export type Arrangement = 'fan' | 'row' | 'scatter';
 export type StickerKey = 'heart' | 'star' | 'flash' | 'sparkle' | 'crown' | 'cherries' | 'xoxo';
 
 export interface Layout {
@@ -59,6 +61,23 @@ export interface Settings {
   dateOn: boolean;
   date: string;
   timer: number;
+  /** Instagram image: size, how many strips, how they are laid out. */
+  format: ShareFormat;
+  copies: number;
+  arrangement: Arrangement;
+  /** Extra strips use the spare photos in the tray when there are enough of them. */
+  useSpares: boolean;
+}
+
+/** Where one strip sits in the Instagram image. x, y and h are fractions of the image size. */
+export interface Placement {
+  copy: number;
+  x: number;
+  y: number;
+  /** Rotation in radians. */
+  rot: number;
+  /** Strip height as a fraction of the image height. */
+  h: number;
 }
 
 export interface Frame {

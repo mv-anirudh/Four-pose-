@@ -1,4 +1,4 @@
-import type { Film, FilmKey, Layout, LayoutKey, Settings, StickerKey, Swatch } from './types';
+import type { Arrangement, Film, FilmKey, Layout, LayoutKey, Settings, ShareFormat, StickerKey, Swatch } from './types';
 
 export const LAYOUTS: Record<LayoutKey, Layout> = {
   strip4: { label: '4 poses', cols: 1, rows: 4, fw: 568, fh: 426 },
@@ -64,7 +64,24 @@ export const DEFAULT_SETTINGS: Settings = {
   dateOn: true,
   date: '', // set on the client after mount, so server and browser render the same HTML
   timer: 3,
+  format: 'story',
+  copies: 2, // a real booth hands you two strips
+  arrangement: 'fan',
+  useSpares: true,
 };
+
+export const FORMATS: Record<ShareFormat, { label: string; ratio: string; w: number; h: number }> = {
+  story: { label: 'Story', ratio: '9:16', w: 1080, h: 1920 },
+  post: { label: 'Post', ratio: '4:5', w: 1080, h: 1350 },
+};
+
+export const ARRANGEMENTS: Record<Arrangement, string> = {
+  fan: 'Fanned',
+  row: 'Side by side',
+  scatter: 'Scattered',
+};
+
+export const MAX_COPIES = 3;
 
 export function slotCount(layout: LayoutKey): number {
   const l = LAYOUTS[layout];
