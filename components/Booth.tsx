@@ -1,0 +1,263 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import CameraDialog from './CameraDialog';
+import Panel from './Panel';
+import StripCanvas from './StripCanvas';
+import { DEFAULT_SETTINGS, MAX_PHOTOS, slotCount } from '@/lib/options';
+import { loadFile, newId } from '@/lib/photos';
+import { canvasToBlob, clamp, geometry, renderForSave, todayISO } from '@/lib/render';
+import type { LayoutKey, Photo, SaveKind, Settings, Sticker } from '@/lib/types';
+
+const fileName = (kind: SaveKind) => `four-poses-${kind}-${todayISO()}.png`;
+
+export default function Booth() {
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [stickers, setStickers] = useState<Sticker[]>([]);
+  const [status, setStatus] = useState('');
+  const [printKey, setPrintKey] = useState(0);
+  const [camOpen, setCamOpen] = useState(false);
+  const [canShare, setCanShare] = useState(false);
+  const [dropping, setDropping] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const pickFiles = useCallback(() => fileInput.current?.click(), []);
+
+  // Lets async handlers read the current photos without going stale.
+  const photosRef = useRef<Photo[]>(photos);
+  useEffect(() => {
+    photosRef.current = photos;
+  }, [photos]);
+
+  const update = useCallback((patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch })), []);
+
+  // Browser-only setup: today's date and whether this device can share files.
+  useEffect(() => {
+    update({ date: todayISO() });
+    try {
+      const probe = new File([new Blob(['x'], { type: 'image/png' })], 'x.png', { type: 'image/png' });
+      setCanShare(Boolean(navigator.canShare?.({ files: [probe] })));
+    } catch {
+      setCanShare(false);
+    }
+  }, [update]);
+
+  const addFiles = useCallback(async (list: FileList | File[]) => {
+    const files = Array.from(list).filter((f) => f.type.startsWith('image/') || /\.(heic|heif)$/i.test(f.name));
+    if (!files.length) {
+      setStatus('Those files are not photos. Choose JPG, PNG or WebP images.');
+      return;
+    }
+    setStatus('');
+    const before = photosRef.current.length;
+    const room = MAX_PHOTOS - before;
+    const loaded: Photo[] = [];
+    const failed: string[] = [];
+    let skipped = 0;
+    for (const file of files) {
+      if (loaded.length >= room) {
+        skipped++;
+        continue;
+      }
+      try {
+        loaded.push(await loadFile(file));
+      } catch {
+        failed.push(file.name);
+      }
+    }
+    const notes: string[] = [];
+    if (failed.length) notes.push(`This browser can't open ${failed.join(', ')}. Convert HEIC photos to JPG, then add them again.`);
+    if (skipped) notes.push(`The tray holds ${MAX_PHOTOS} photos, so ${skipped} were left out. Remove some to add more.`);
+    setStatus(notes.join(' '));
+    if (loaded.length) {
+      setPhotos((prev) => [...prev, ...loaded].slice(0, MAX_PHOTOS));
+      if (before === 0) setPrintKey((k) => k + 1);
+    }
+  }, []);
+
+  // Drop or paste photos anywhere on the page.
+  useEffect(() => {
+    const over = (e: DragEvent) => {
+      e.preventDefault();
+      setDropping(true);
+    };
+    const leave = (e: DragEvent) => {
+      if (!e.relatedTarget) setDropping(false);
+    };
+    const drop = (e: DragEvent) => {
+      e.preventDefault();
+      setDropping(false);
+      if (e.dataTransfer?.files.length) void addFiles(e.dataTransfer.files);
+    };
+    const paste = (e: ClipboardEvent) => {
+      const files = e.clipboardData ? Array.from(e.clipboardData.files) : [];
+      if (files.length) void addFiles(files);
+    };
+    window.addEventListener('dragover', over);
+    window.addEventListener('dragleave', leave);
+    window.addEventListener('drop', drop);
+    window.addEventListener('paste', paste);
+    return () => {
+      window.removeEventListener('dragover', over);
+      window.removeEventListener('dragleave', leave);
+      window.removeEventListener('drop', drop);
+      window.removeEventListener('paste', paste);
+    };
+  }, [addFiles]);
+
+  const changeLayout = (layout: LayoutKey) => {
+    const g = geometry(layout);
+    // Keep stickers inside the new strip size.
+    setStickers((list) => list.map((s) => ({ ...s, x: clamp(s.x, 0, g.W), y: clamp(s.y, 0, g.H) })));
+    update({ layout });
+  };
+
+  const addSticker = (ch: string) => {
+    const g = geometry(settings.layout);
+    setStickers((list) => [
+      ...list,
+      {
+        id: newId(),
+        ch,
+        x: g.W * (0.2 + Math.random() * 0.6),
+        y: g.H * (0.15 + Math.random() * 0.6),
+        size: 72,
+        rot: (Math.random() - 0.5) * 0.5,
+      },
+    ]);
+  };
+
+  const save = async (kind: SaveKind) => {
+    if (!photos.length) {
+      setStatus('Add a photo first, then download.');
+      return;
+    }
+    const blob = await canvasToBlob(renderForSave(kind, photos, stickers, settings));
+    if (!blob) {
+      setStatus("The image couldn't be made. Try a smaller layout or fewer effects.");
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName(kind);
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    setStatus('');
+  };
+
+  const share = async () => {
+    if (!photos.length) {
+      setStatus('Add a photo first, then share.');
+      return;
+    }
+    const blob = await canvasToBlob(renderForSave('story', photos, stickers, settings));
+    if (!blob) return;
+    try {
+      await navigator.share({ files: [new File([blob], fileName('story'), { type: 'image/png' })], title: 'Photo strip' });
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === 'AbortError')) {
+        setStatus("Sharing didn't work here. Download the image and share it from your gallery.");
+      }
+    }
+  };
+
+  const closeCamera = useCallback(() => setCamOpen(false), []);
+  const cameraError = useCallback((message: string) => {
+    setCamOpen(false);
+    setStatus(message);
+  }, []);
+  const cameraDone = useCallback((taken: Photo[]) => {
+    setCamOpen(false);
+    setPhotos(taken);
+    setPrintKey((k) => k + 1);
+  }, []);
+
+  return (
+    <div className="booth">
+      <aside className="sign" aria-hidden="true">
+        <span>PHOTOS</span>
+      </aside>
+      <div className="trim" aria-hidden="true" />
+
+      <main className={dropping ? 'stage is-dropping' : 'stage'}>
+        <header className="masthead">
+          <h1>Four Poses</h1>
+          <p>Turn your photos into a photo booth strip. Nothing leaves this device.</p>
+        </header>
+
+        <div className="chute">
+          <div className="slot" />
+          <StripCanvas
+            key={printKey}
+            animate={printKey > 0}
+            photos={photos}
+            stickers={stickers}
+            settings={settings}
+            onPanPhoto={(index, ox, oy) => setPhotos((list) => list.map((p, i) => (i === index ? { ...p, ox, oy } : p)))}
+            onMoveSticker={(id, x, y) => setStickers((list) => list.map((s) => (s.id === id ? { ...s, x, y } : s)))}
+            onRemoveSticker={(id) => setStickers((list) => list.filter((s) => s.id !== id))}
+            onEmptyFrame={pickFiles}
+          />
+        </div>
+
+        <p className="hint">
+          {photos.length === 0
+            ? 'Click an empty frame to add photos, or drop them anywhere on the page.'
+            : 'Drag a photo inside its frame to re-centre it. Drag stickers to move them, double-click one to remove it.'}
+        </p>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            if (e.target.files) void addFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
+      </main>
+      <div className="trim" aria-hidden="true" />
+
+      <Panel
+        settings={settings}
+        photos={photos}
+        status={status}
+        stickerCount={stickers.length}
+        canShare={canShare}
+        onChange={update}
+        onLayout={changeLayout}
+        onPickFiles={pickFiles}
+        onOpenCamera={() => {
+          setStatus('');
+          setCamOpen(true);
+        }}
+        onMoveEarlier={(i) =>
+          setPhotos((list) => {
+            if (i <= 0) return list;
+            const next = [...list];
+            [next[i - 1], next[i]] = [next[i], next[i - 1]];
+            return next;
+          })
+        }
+        onRemovePhoto={(i) => setPhotos((list) => list.filter((_, n) => n !== i))}
+        onAddSticker={addSticker}
+        onClearStickers={() => setStickers([])}
+        onSave={(kind) => void save(kind)}
+        onShare={() => void share()}
+      />
+
+      <CameraDialog
+        open={camOpen}
+        shots={slotCount(settings.layout)}
+        timer={settings.timer}
+        onDone={cameraDone}
+        onClose={closeCamera}
+        onError={cameraError}
+      />
+    </div>
+  );
+}
