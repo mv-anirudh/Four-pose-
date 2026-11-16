@@ -106,7 +106,18 @@ body {
 /* Strip 1 and any extra strips stand side by side under one slot */
 .prints { display: flex; align-items: flex-start; justify-content: center; gap: 16px; }
 .print { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0; }
-.print figcaption { font-size: 13px; line-height: 1.3; color: rgba(239, 233, 220, 0.72); text-align: center; text-wrap: balance; }
+.print figcaption { display: grid; justify-items: center; gap: 6px; font-size: 13px; line-height: 1.3; color: rgba(239, 233, 220, 0.72); text-align: center; text-wrap: balance; }
+
+/* Controls that sit on the green stage itself: ivory lines on enamel, lamp when chosen */
+.strip-count { display: grid; justify-items: center; gap: 6px; margin: 0 0 14px; }
+.strip-count .choices { justify-content: center; margin: 0; }
+.strip-count .check { margin: 0; font-size: 14px; color: rgba(239, 233, 220, 0.86); text-wrap: balance; }
+.strip-count .check input { accent-color: var(--lamp); }
+.strip-count .btn, .btn-stage { color: var(--paper); border-color: rgba(239, 233, 220, 0.6); }
+.strip-count .btn:hover, .btn-stage:hover { background: rgba(239, 233, 220, 0.1); }
+.strip-count .btn[aria-pressed="true"] { background: var(--lamp); border-color: var(--lamp); color: var(--ink); }
+.btn-stage { font-size: 14px; padding: 6px 12px; }
+.stage-status { margin: 4px 0 0; font-weight: 600; color: var(--lamp); text-align: center; }
 
 /*
  * Every strip is sized from its height so the slot above can hug the real width.
@@ -208,7 +219,7 @@ canvas.strip.is-empty { cursor: pointer; }
   border: 1.5px solid var(--ink);
   border-radius: 6px;
   padding: 9px 14px;
-  min-height: 42px;
+  min-height: 44px;
   cursor: pointer;
 }
 .btn:hover { background: rgba(27, 26, 23, 0.08); }
@@ -231,8 +242,12 @@ canvas.strip.is-empty { cursor: pointer; }
     var(--paper);
 }
 .plate :focus-visible { outline-color: var(--enamel); }
-.insta h2 { font-size: 19px; font-weight: 600; margin: 0 0 12px; padding-left: 10px; }
-.insta-cols { display: grid; gap: 16px; }
+.insta { padding-block: 12px; }
+.insta.is-open { padding-block: 18px 20px; }
+.insta-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding-inline: 8px; }
+.insta h2 { font-size: 19px; font-weight: 600; margin: 0; }
+.insta-summary { margin: 0; flex: 1; min-width: 12ch; font-size: 15px; color: rgba(27, 26, 23, 0.72); font-variant-numeric: tabular-nums; }
+.insta-cols { display: grid; gap: 16px; margin-top: 16px; }
 .insta-view, .insta-controls { display: grid; gap: 12px; align-content: start; min-width: 0; }
 @container (min-width: 640px) {
   .insta-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; }
@@ -243,7 +258,6 @@ canvas.strip.is-empty { cursor: pointer; }
 .ratio { font-weight: 400; font-size: 13px; opacity: 0.7; font-variant-numeric: tabular-nums; }
 .insta-actions { display: flex; gap: 8px; }
 .btn-wide { flex: 1; }
-.insta .btn-quiet { justify-self: start; min-height: 36px; }
 
 /* The sample-photo window on the outside of the booth: a steel frame around glass */
 .window {
@@ -273,10 +287,12 @@ canvas.strip.is-empty { cursor: pointer; }
 .window-pick {
   position: absolute;
   pointer-events: none;
-  outline: 2px dashed var(--lamp);
-  outline-offset: 3px;
+  /* Ivory then ink, so the chosen strip shows on every backdrop colour */
+  outline: 2px dashed var(--ink);
+  outline-offset: 5px;
+  box-shadow: 0 0 0 3px var(--paper);
 }
-.btn-quiet { justify-self: start; min-height: 36px; }
+.btn-quiet { justify-self: start; }
 .btn-quiet { border-color: transparent; text-decoration: underline; padding-left: 0; }
 .btn[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 
@@ -284,7 +300,7 @@ canvas.strip.is-empty { cursor: pointer; }
 .panel :focus-visible { outline-color: var(--enamel); }
 
 .choices { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.choices .btn { padding: 7px 12px; min-height: 38px; }
+.choices .btn { padding: 7px 12px; min-height: 44px; }
 
 .field {
   display: grid;
@@ -308,12 +324,13 @@ canvas.strip.is-empty { cursor: pointer; }
   width: 100%;
 }
 .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.check { min-height: 44px; cursor: pointer; }
 .check input { width: 18px; height: 18px; accent-color: var(--curtain); }
 
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
 .swatch {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 1.5px solid var(--ink);
   cursor: pointer;

@@ -5,9 +5,10 @@ import CameraDialog from './CameraDialog';
 import InstaPlate from './InstaPlate';
 import Panel from './Panel';
 import StripCanvas from './StripCanvas';
+import StripCount from './StripCount';
 import { DEFAULT_SETTINGS, MAX_PHOTOS, slotCount } from '@/lib/options';
 import { loadFile, newId } from '@/lib/photos';
-import { canvasToBlob, clamp, geometry, photoSets, presetPlacements, renderForSave, todayISO } from '@/lib/render';
+import { canvasToBlob, clamp, geometry, photoSets, presetPlacements, renderForSave, renderStrip, todayISO } from '@/lib/render';
 import type { LayoutKey, Photo, Placement, SaveKind, Settings, Sticker, StickerKey } from '@/lib/types';
 
 const fileName = (kind: SaveKind) => `four-poses-${kind}-${todayISO()}.png`;
@@ -17,6 +18,7 @@ export default function Booth() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [status, setStatus] = useState('');
+  const [instaStatus, setInstaStatus] = useState('');
   const [printKey, setPrintKey] = useState(0);
   const [camOpen, setCamOpen] = useState(false);
   const [canShare, setCanShare] = useState(false);
@@ -142,42 +144,49 @@ export default function Booth() {
     ]);
   };
 
-  const save = async (kind: SaveKind) => {
-    if (!photos.length) {
-      setStatus('Add a photo first, then download.');
-      return;
-    }
-    const blob = await canvasToBlob(renderForSave(kind, photos, stickers, settings, placements));
-    if (!blob) {
-      setStatus("The image couldn't be made. Try a smaller layout or fewer effects.");
-      return;
-    }
+  const MAKE_FAILED = "The image couldn't be made. Try a smaller layout or fewer effects.";
+
+  /** Saves a finished canvas as a PNG download. Returns an error message, or '' when it worked. */
+  const download = async (canvas: HTMLCanvasElement, name: string): Promise<string> => {
+    const blob = await canvasToBlob(canvas);
+    if (!blob) return MAKE_FAILED;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = fileName(kind);
+    a.download = name;
     document.body.append(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
-    setStatus('');
+    return '';
+  };
+
+  // Strip downloads report in the panel; Instagram downloads report under their own buttons.
+  const save = async (kind: SaveKind) => {
+    const report = kind === 'strip' ? setStatus : setInstaStatus;
+    if (!photos.length) {
+      report('Add a photo first, then download.');
+      return;
+    }
+    report(await download(renderForSave(kind, photos, stickers, settings, placements), fileName(kind)));
   };
 
   const share = async () => {
     if (!photos.length) {
-      setStatus('Add a photo first, then share.');
+      setInstaStatus('Add a photo first, then share.');
       return;
     }
     const blob = await canvasToBlob(renderForSave(settings.format, photos, stickers, settings, placements));
     if (!blob) {
-      setStatus("The image couldn't be made. Try a smaller layout or fewer effects.");
+      setInstaStatus(MAKE_FAILED);
       return;
     }
+    setInstaStatus('');
     try {
       await navigator.share({ files: [new File([blob], fileName(settings.format), { type: 'image/png' })], title: 'Photo strip' });
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) {
-        setStatus("Sharing didn't work here. Download the image and share it from your gallery.");
+        setInstaStatus("Sharing didn't work here. Download the image and share it from your gallery.");
       }
     }
   };
@@ -213,6 +222,14 @@ export default function Booth() {
     setStickers((list) => list.map((s) => (s.id === id ? { ...s, x, y } : s)));
   const removeSticker = (id: number) => setStickers((list) => list.filter((s) => s.id !== id));
 
+  // Each strip on the stage downloads on its own, drawn at export size like strip 1.
+  const [stripStatus, setStripStatus] = useState('');
+  const downloadStrip = async (i: number) => {
+    const strip = strips[i];
+    if (!strip) return;
+    setStripStatus(await download(renderStrip(strip.photos, strip.stickers, settings, 2), `four-poses-strip-${i + 1}-${todayISO()}.png`));
+  };
+
   const closeCamera = useCallback(() => setCamOpen(false), []);
   const cameraError = useCallback((message: string) => {
     setCamOpen(false);
@@ -244,7 +261,7 @@ export default function Booth() {
           placements={placements}
           selectedCopy={selectedCopy}
           canShare={canShare}
-          slots={perStrip}
+          status={instaStatus}
           onChange={update}
           onSelectCopy={setSelectedCopy}
           onMovePlacement={(copy, x, y) =>
@@ -259,6 +276,8 @@ export default function Booth() {
           onSave={(kind) => void save(kind)}
           onShare={() => void share()}
         />
+
+        {photos.length > 0 && <StripCount settings={settings} photos={photos} slots={perStrip} onChange={update} />}
 
         <div className="chute" style={{ '--copies': strips.length } as React.CSSProperties}>
           <div className="slot" />
@@ -277,11 +296,25 @@ export default function Booth() {
                   onRemoveSticker={removeSticker}
                   onEmptyFrame={pickFiles}
                 />
-                {strips.length > 1 && <figcaption>{strip.caption}</figcaption>}
+                {strips.length > 1 && (
+                  <figcaption>
+                    <span>{strip.caption}</span>
+                    {photos.length > 0 && (
+                      <button className="btn btn-stage" type="button" onClick={() => void downloadStrip(i)}>
+                        Download strip {i + 1}
+                      </button>
+                    )}
+                  </figcaption>
+                )}
               </figure>
             ))}
           </div>
         </div>
+        {stripStatus && (
+          <p className="stage-status" role="status">
+            {stripStatus}
+          </p>
+        )}
 
         <p className="hint">
           {photos.length === 0
