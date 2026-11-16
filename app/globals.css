@@ -269,15 +269,17 @@ body {
 
 .stickers { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
 .stickers button {
-  font-size: 24px;
-  width: 46px;
-  height: 46px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
   background: #fbf8f1;
   border: 1.5px solid var(--ink);
   border-radius: 6px;
   cursor: pointer;
 }
 .stickers button:hover { background: #fff; }
+.stickers canvas { width: 36px; height: 36px; display: block; }
 
 
 /* Camera */

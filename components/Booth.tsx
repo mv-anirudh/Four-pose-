@@ -7,7 +7,7 @@ import StripCanvas from './StripCanvas';
 import { DEFAULT_SETTINGS, MAX_PHOTOS, slotCount } from '@/lib/options';
 import { loadFile, newId } from '@/lib/photos';
 import { canvasToBlob, clamp, geometry, renderForSave, todayISO } from '@/lib/render';
-import type { LayoutKey, Photo, SaveKind, Settings, Sticker } from '@/lib/types';
+import type { LayoutKey, Photo, SaveKind, Settings, Sticker, StickerKey } from '@/lib/types';
 
 const fileName = (kind: SaveKind) => `four-poses-${kind}-${todayISO()}.png`;
 
@@ -112,13 +112,13 @@ export default function Booth() {
     update({ layout });
   };
 
-  const addSticker = (ch: string) => {
+  const addSticker = (kind: StickerKey) => {
     const g = geometry(settings.layout);
     setStickers((list) => [
       ...list,
       {
         id: newId(),
-        ch,
+        kind,
         x: g.W * (0.2 + Math.random() * 0.6),
         y: g.H * (0.15 + Math.random() * 0.6),
         size: 72,
@@ -154,7 +154,10 @@ export default function Booth() {
       return;
     }
     const blob = await canvasToBlob(renderForSave('story', photos, stickers, settings));
-    if (!blob) return;
+    if (!blob) {
+      setStatus("The image couldn't be made. Try a smaller layout or fewer effects.");
+      return;
+    }
     try {
       await navigator.share({ files: [new File([blob], fileName('story'), { type: 'image/png' })], title: 'Photo strip' });
     } catch (err) {

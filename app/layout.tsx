@@ -5,11 +5,17 @@ export const metadata: Metadata = {
   title: 'Four Poses, a vintage photo booth',
   description:
     'Turn your photos into a vintage photo booth strip, sized for Instagram. Everything stays on your device.',
+  openGraph: {
+    title: 'Four Poses',
+    description: 'Turn your photos into a vintage photo booth strip. Everything stays on your device.',
+    type: 'website',
+  },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  themeColor: '#17463f',
 };
 
 // Fonts are loaded with a plain stylesheet link so the canvas can use them

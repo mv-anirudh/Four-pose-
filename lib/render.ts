@@ -1,5 +1,5 @@
 import { FILMS, FOOT, GAP, LAYOUTS, MARGIN } from './options';
-import type { Frame, LayoutKey, Photo, SaveKind, Settings, Sticker } from './types';
+import type { Frame, LayoutKey, Photo, SaveKind, Settings, Sticker, StickerKey } from './types';
 
 /* All drawing is plain canvas code with no React in it, so it can be tested on its own. */
 
@@ -221,13 +221,156 @@ export function renderStrip(photos: Photo[], stickers: Sticker[], s: Settings, s
     ctx.save();
     ctx.translate(st.x, st.y);
     ctx.rotate(st.rot);
-    ctx.font = `${st.size}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(st.ch, 0, 0);
+    drawSticker(ctx, st.kind, st.size);
     ctx.restore();
   }
   return c;
+}
+
+/* Stickers: die-cut paper shapes in the booth palette, drawn the same way on every device. */
+
+const INK = '#1b1a17';
+const CUT = '#fbf8f1';
+const RED = '#8e1f2b';
+const AMBER = '#e9ae3f';
+const GREEN = '#17463f';
+
+/** One shape of a sticker, in a unit box from -0.5 to 0.5. `line` makes it a stroke (like a stem) instead of a fill. */
+interface StickerPart {
+  path: Path2D;
+  color: string;
+  line?: number;
+}
+
+function poly(points: [number, number][]): Path2D {
+  const p = new Path2D();
+  points.forEach(([x, y], i) => (i ? p.lineTo(x, y) : p.moveTo(x, y)));
+  p.closePath();
+  return p;
+}
+
+function buildSticker(kind: Exclude<StickerKey, 'xoxo'>): StickerPart[] {
+  switch (kind) {
+    case 'heart': {
+      const p = new Path2D();
+      p.moveTo(0, 0.42);
+      p.bezierCurveTo(-0.58, 0.04, -0.42, -0.46, 0, -0.18);
+      p.bezierCurveTo(0.42, -0.46, 0.58, 0.04, 0, 0.42);
+      return [{ path: p, color: RED }];
+    }
+    case 'star': {
+      const pts: [number, number][] = [];
+      for (let i = 0; i < 10; i++) {
+        const r = i % 2 ? 0.21 : 0.5;
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        pts.push([Math.cos(a) * r, Math.sin(a) * r + 0.04]);
+      }
+      return [{ path: poly(pts), color: AMBER }];
+    }
+    case 'flash':
+      return [
+        {
+          path: poly([[-0.05, -0.5], [0.25, -0.5], [0.06, -0.1], [0.3, -0.1], [-0.15, 0.5], [0, 0.02], [-0.25, 0.02]]),
+          color: AMBER,
+        },
+      ];
+    case 'sparkle': {
+      const p = new Path2D();
+      p.moveTo(0, -0.5);
+      p.quadraticCurveTo(0.07, -0.07, 0.5, 0);
+      p.quadraticCurveTo(0.07, 0.07, 0, 0.5);
+      p.quadraticCurveTo(-0.07, 0.07, -0.5, 0);
+      p.quadraticCurveTo(-0.07, -0.07, 0, -0.5);
+      p.closePath();
+      return [{ path: p, color: GREEN }];
+    }
+    case 'crown':
+      return [
+        {
+          path: poly([[-0.42, 0.34], [-0.46, -0.22], [-0.2, 0.02], [0, -0.36], [0.2, 0.02], [0.46, -0.22], [0.42, 0.34]]),
+          color: AMBER,
+        },
+      ];
+    case 'cherries': {
+      const stems = new Path2D();
+      stems.moveTo(-0.17, 0.1);
+      stems.quadraticCurveTo(-0.08, -0.22, 0.12, -0.42);
+      stems.moveTo(0.19, 0.04);
+      stems.quadraticCurveTo(0.12, -0.2, 0.12, -0.42);
+      const left = new Path2D();
+      left.arc(-0.18, 0.26, 0.17, 0, Math.PI * 2);
+      const right = new Path2D();
+      right.arc(0.2, 0.2, 0.17, 0, Math.PI * 2);
+      return [
+        { path: stems, color: GREEN, line: 0.05 },
+        { path: left, color: RED },
+        { path: right, color: RED },
+      ];
+    }
+  }
+}
+
+const stickerCache = new Map<StickerKey, StickerPart[]>();
+
+/** Draws a sticker centred on the current origin, `size` strip units across. */
+export function drawSticker(ctx: CanvasRenderingContext2D, kind: StickerKey, size: number): void {
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  if (kind === 'xoxo') {
+    // Handwritten, so it uses the caption face instead of a path.
+    ctx.font = `600 ${size * 0.8}px "Caveat", "Segoe Script", cursive`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeStyle = CUT;
+    ctx.lineWidth = size * 0.14;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+    ctx.shadowBlur = size * 0.06;
+    ctx.shadowOffsetY = size * 0.02;
+    ctx.strokeText('xoxo', 0, 0);
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = RED;
+    ctx.fillText('xoxo', 0, 0);
+    ctx.restore();
+    return;
+  }
+
+  let parts = stickerCache.get(kind);
+  if (!parts) {
+    parts = buildSticker(kind);
+    stickerCache.set(kind, parts);
+  }
+
+  // Paper backing with a soft shadow, as if cut out and stuck on.
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+  ctx.shadowBlur = size * 0.06;
+  ctx.shadowOffsetY = size * 0.02;
+  ctx.scale(size, size);
+  ctx.strokeStyle = CUT;
+  ctx.fillStyle = CUT;
+  for (const p of parts) {
+    ctx.lineWidth = (p.line ?? 0) + 0.14;
+    ctx.stroke(p.path);
+    if (!p.line) ctx.fill(p.path);
+  }
+  ctx.shadowColor = 'transparent';
+
+  // Printed colour with a thin ink edge.
+  for (const p of parts) {
+    if (p.line) {
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = p.line;
+      ctx.stroke(p.path);
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.fill(p.path);
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 0.025;
+      ctx.stroke(p.path);
+    }
+  }
+  ctx.restore();
 }
 
 /** Places the strip, slightly tilted, on a coloured backdrop at an Instagram size. */

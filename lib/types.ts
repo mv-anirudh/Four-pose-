@@ -1,6 +1,7 @@
 export type LayoutKey = 'strip4' | 'strip3' | 'strip2' | 'grid4' | 'single';
 export type FilmKey = 'silver' | 'sepia' | 'faded' | 'drugstore' | 'carnival' | 'none';
 export type SaveKind = 'strip' | 'story' | 'post';
+export type StickerKey = 'heart' | 'star' | 'flash' | 'sparkle' | 'crown' | 'cherries' | 'xoxo';
 
 export interface Layout {
   label: string;
@@ -37,7 +38,7 @@ export interface Photo {
 
 export interface Sticker {
   id: number;
-  ch: string;
+  kind: StickerKey;
   /** Position in strip units (see geometry()). */
   x: number;
   y: number;

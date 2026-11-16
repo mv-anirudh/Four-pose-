@@ -17,6 +17,20 @@ interface Props {
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+function cameraErrorMessage(err: unknown): string {
+  const name = err instanceof DOMException ? err.name : '';
+  if (name === 'NotAllowedError' || name === 'SecurityError') {
+    return "Camera access is blocked. Allow the camera in the browser's site settings, then choose Use camera again.";
+  }
+  if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+    return 'No camera was found. Add photos from your files instead.';
+  }
+  if (name === 'NotReadableError' || name === 'AbortError') {
+    return 'Another app is using the camera. Close it, then choose Use camera again.';
+  }
+  return "The camera didn't start. Choose Use camera again, or add photos from your files.";
+}
+
 export default function CameraDialog({ open, shots, timer, onDone, onClose, onError }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -42,7 +56,9 @@ export default function CameraDialog({ open, shots, timer, onDone, onClose, onEr
     (async () => {
       if (!navigator.mediaDevices?.getUserMedia) {
         handlers.current.onError(
-          "This browser can't open the camera here. Add photos from your files instead, or open the app at localhost with npm run dev.",
+          window.isSecureContext
+            ? "This browser can't open the camera. Add photos from your files instead."
+            : 'The camera only works on a secure (https) page. Open the app over https, or add photos from your files.',
         );
         return;
       }
@@ -52,11 +68,7 @@ export default function CameraDialog({ open, shots, timer, onDone, onClose, onEr
           audio: false,
         });
       } catch (err) {
-        handlers.current.onError(
-          err instanceof DOMException && err.name === 'NotAllowedError'
-            ? "Camera access is blocked. Allow the camera in the browser's site settings, then choose Use camera again."
-            : 'No camera was found. Add photos from your files instead.',
-        );
+        handlers.current.onError(cameraErrorMessage(err));
         return;
       }
       if (cancelled || !dialog || !video) {
