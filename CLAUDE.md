@@ -14,6 +14,7 @@ Vintage photo booth web app. Next.js (App Router) + React + TypeScript, static e
 - `lib/render.ts` is pure canvas code with no React. All drawing and film effects live here. The same `renderStrip()` draws the preview (scale 1) and the downloads (scale 2), so the preview always matches the export.
 - `lib/options.ts` holds every layout, film look, colour and limit. Adding a film or layout means adding one entry there plus its key in `lib/types.ts`.
 - The Instagram image is `renderShare()` in `lib/render.ts`: strips placed by `Placement` (centre and height as fractions of the image, plus rotation). `presetPlacements()` gives the starting layout; Booth resets placements when size, strip count, arrangement or layout changes. The preview and the download use the same placements.
+- Extra strips (the Strips setting) also drop out on the stage beside strip 1, using `photoSets()` like the Instagram image. They are read-only `PrintCopy` canvases; strip 1 is the one you edit. All strips share one height, set in CSS from the stage width (`cqw`) and `--copies` so they always fit side by side.
 - Hold-to-pick-up (380 ms, 7 px slop) is used on the strip (swap) and the tray (move). A move before the hold completes is a pan or a scroll.
 - Coordinates for stickers and dragging are in "strip units" from `geometry(layout)`, not screen pixels.
 

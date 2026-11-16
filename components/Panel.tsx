@@ -81,7 +81,7 @@ function trayNote(count: number, slots: number): string {
   if (count === 0) return `Add up to ${MAX_PHOTOS} photos. The first ${slots} fill the strip.`;
   const spare = count - slots;
   if (spare > 0) {
-    return `The first ${slots} are on the strip. Spare photos can fill extra strips in your Instagram image. Hold a photo and drag it to change its place.`;
+    return `The first ${slots} are on strip 1. Spare photos fill the extra strips you add under Save and share. Hold a photo and drag it to change its place.`;
   }
   if (count < slots) return `This layout has room for ${slots - count} more.`;
   return 'The strip is full. Hold a photo and drag it to change its place.';

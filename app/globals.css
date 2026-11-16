@@ -63,6 +63,8 @@ body {
   align-items: center;
   padding: 28px 24px 32px;
   min-width: 0;
+  /* Lets the strips size themselves to the stage width (cqw) */
+  container-type: inline-size;
 }
 .masthead { text-align: center; margin-bottom: 20px; }
 .masthead h1 {
@@ -101,13 +103,24 @@ body {
   max-width: 100%;
   filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.4));
 }
-#strip {
+/* Strip 1 and any extra strips stand side by side under one slot */
+.prints { display: flex; align-items: flex-start; justify-content: center; gap: 16px; }
+.print { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0; }
+.print figcaption { font-size: 13px; line-height: 1.3; color: rgba(239, 233, 220, 0.72); text-align: center; text-wrap: balance; }
+
+/*
+ * Every strip is sized from its height so the slot above can hug the real width.
+ * --fit-h is the tallest a strip can be while all of them (--copies) fit across the stage.
+ */
+#strip, .print-copy {
+  --fit-h: calc((100cqw - 24px - (var(--copies, 1) - 1) * 16px) / var(--copies, 1) * var(--strip-h) / var(--strip-w));
   display: block;
-  /* Sized from its height so the slot above can hug the strip's real width */
-  height: min(calc(100vh - 210px), calc(520px * var(--strip-h) / var(--strip-w)));
-  min-height: min(300px, calc(100vw * var(--strip-h) / var(--strip-w)));
+  height: min(calc(100vh - 230px), calc(520px * var(--strip-h) / var(--strip-w)), var(--fit-h));
+  min-height: min(300px, var(--fit-h));
   width: auto;
   max-width: 100%;
+}
+#strip {
   touch-action: none;
   cursor: grab;
 }
@@ -424,7 +437,9 @@ body {
   .sign { padding: 10px 0; }
   .sign span { writing-mode: horizontal-tb; font-size: 30px; position: static; letter-spacing: 0.2em; }
   .stage { padding: 20px 14px 24px; }
-  #strip { height: min(68vh, calc(78vw * var(--strip-h) / var(--strip-w))); }
+  #strip, .print-copy { height: min(68vh, calc(78vw * var(--strip-h) / var(--strip-w)), var(--fit-h)); }
+  .prints { gap: 10px; }
+  .print figcaption { font-size: 12px; }
   .panel { position: static; max-height: none; }
   .field { grid-template-columns: 130px 1fr; }
 }
