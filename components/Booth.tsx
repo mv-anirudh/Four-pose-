@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import CameraDialog from './CameraDialog';
+import SaveDialog, { type SaveImage } from './SaveDialog';
 import InstaPlate from './InstaPlate';
 import Panel from './Panel';
 import StripCanvas from './StripCanvas';
 import { DEFAULT_SETTINGS, MAX_PHOTOS, slotCount } from '@/lib/options';
+import { inAppName, isInAppBrowser } from '@/lib/inapp';
 import { loadFile, newId } from '@/lib/photos';
 import { canvasToBlob, clamp, geometry, photoSets, presetPlacements, renderForSave, renderStrip, todayISO } from '@/lib/render';
 import type { LayoutKey, Photo, Placement, SaveKind, Settings, Sticker, StickerKey } from '@/lib/types';
@@ -23,6 +25,8 @@ export default function Booth() {
   const [printKey, setPrintKey] = useState(0);
   const [camOpen, setCamOpen] = useState(false);
   const [canShare, setCanShare] = useState(false);
+  /** The finished image waiting to be saved by hand, inside app browsers that block downloads. */
+  const [toSave, setToSave] = useState<SaveImage | null>(null);
   const [dropping, setDropping] = useState(false);
   const [placements, setPlacements] = useState<Placement[]>(() =>
     presetPlacements(DEFAULT_SETTINGS.copies, DEFAULT_SETTINGS.arrangement, DEFAULT_SETTINGS.format, DEFAULT_SETTINGS.layout),
@@ -153,6 +157,11 @@ export default function Booth() {
   const download = async (canvas: HTMLCanvasElement, name: string): Promise<string> => {
     const blob = await canvasToBlob(canvas);
     if (!blob) return MAKE_FAILED;
+    // Instagram, X and other app browsers ignore downloads: show the image to press and hold instead.
+    if (isInAppBrowser()) {
+      setToSave({ src: canvas.toDataURL('image/png'), name, blob });
+      return '';
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -160,7 +169,8 @@ export default function Booth() {
     document.body.append(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    // Some browsers start the download late, so keep the link alive for a while.
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
     return '';
   };
 
@@ -404,6 +414,8 @@ export default function Booth() {
         onClearStickers={() => setStickers([])}
         onSave={(kind) => void save(kind)}
       />
+
+      <SaveDialog image={toSave} appName={toSave ? inAppName() : null} canShare={canShare} onClose={() => setToSave(null)} />
 
       <CameraDialog
         open={camOpen}
