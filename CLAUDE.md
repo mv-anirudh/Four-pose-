@@ -20,6 +20,7 @@ Vintage photo booth web app. Next.js (App Router) + React + TypeScript, static e
 - The strip uses `touch-action: pan-y` so a vertical swipe scrolls the page; a touch pan must start sideways, and StripCanvas holds the gesture once something is moving.
 - On a stage narrower than 520px, strips show one at a time at full size, picked with the "Strip to show" buttons.
 - Fonts are self-hosted in `app/fonts` (see `app/fonts.css`); the page makes no third-party requests. Type sizes are in `rem`.
+- Downloads: in app browsers (Instagram, Facebook, X, TikTok and others, detected in `lib/inapp.ts`) a download link does nothing, so `download()` in Booth opens `SaveDialog` with the image as a data URL to press and hold, plus Share where supported. Elsewhere it is a normal `<a download>`.
 - Hold-to-pick-up (380 ms, 7 px slop) is used on the strip (swap) and the tray (move). A move before the hold completes is a pan or a scroll.
 - Coordinates for stickers and dragging are in "strip units" from `geometry(layout)`, not screen pixels.
 

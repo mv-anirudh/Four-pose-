@@ -489,6 +489,24 @@ canvas.strip.is-empty { cursor: pointer; }
 .cam .btn:hover { background: rgba(239, 233, 220, 0.12); }
 .cam .btn-primary { background: var(--curtain); border-color: var(--curtain); }
 
+/* Save dialog for app browsers that block downloads */
+.save { max-height: 92vh; overflow-y: auto; display: grid; gap: 12px; }
+.save:not([open]) { display: none; }
+.save h2 { font-family: var(--sign); font-weight: 400; font-size: 1.5rem; color: var(--lamp); margin: 0; }
+.save-how, .save-note { margin: 0; }
+.save-note { font-size: 0.875rem; color: rgba(239, 233, 220, 0.8); }
+.save-img {
+  display: block;
+  max-width: 100%;
+  max-height: 58vh;
+  margin: 0 auto;
+  border-radius: 3px;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.45);
+  /* Keep the long-press menu so the image can be saved */
+  -webkit-touch-callout: default;
+  user-select: auto;
+}
+
 /* Phone and tablet */
 @media (max-width: 900px) {
   .booth { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 6px auto 6px auto; }
