@@ -18,6 +18,8 @@ interface Props {
   slots: number;
   /** Message from the last download or share here, shown under its buttons. */
   status: string;
+  /** 'insta' while the download is being made, 'share' while the share image is. */
+  busy: string | null;
   onChange: (patch: Partial<Settings>) => void;
   onSelectCopy: (copy: number) => void;
   onMovePlacement: (copy: number, x: number, y: number) => void;
@@ -122,11 +124,17 @@ export default function InstaPlate(p: Props) {
 
               <div className="insta-actions">
                 <button className="btn btn-primary btn-wide" type="button" onClick={() => p.onSave(settings.format)}>
-                  Download {f.label.toLowerCase()} <span className="ratio">{f.ratio}</span>
+                  {p.busy === 'insta' ? (
+                    'Making image…'
+                  ) : (
+                    <>
+                      Download {f.label.toLowerCase()} <span className="ratio">{f.ratio}</span>
+                    </>
+                  )}
                 </button>
                 {p.canShare && (
                   <button className="btn" type="button" onClick={p.onShare}>
-                    Share
+                    {p.busy === 'share' ? 'Making…' : 'Share'}
                   </button>
                 )}
               </div>

@@ -61,8 +61,35 @@ export function geometry(layout: LayoutKey): { W: number; H: number; frames: Fra
   return { W, H, frames };
 }
 
-/** Draws one photo into its frame and applies the film look. */
+/** Developed preview frames, newest last. Exports (scale above 1) are big and rare, so they are not kept. */
+const frameCache = new Map<string, HTMLCanvasElement>();
+const FRAME_CACHE_MAX = 60;
+
+/**
+ * Draws one photo into its frame and applies the film look.
+ * Preview frames are cached by photo, crop, size and film settings, so moving one photo
+ * or a sticker does not redo the per-pixel work for every other frame.
+ */
 function developFrame(photo: Photo, frame: Frame, scale: number, index: number, s: Settings): HTMLCanvasElement {
+  if (scale > 1) return developFrameNow(photo, frame, scale, index, s);
+  const key = [photo.id, photo.ox, photo.oy, frame.w, frame.h, scale, index, s.film, s.grain, s.vignette, s.leak, s.wear].join('|');
+  const hit = frameCache.get(key);
+  if (hit) {
+    // Refresh its place so the oldest entries are the ones dropped.
+    frameCache.delete(key);
+    frameCache.set(key, hit);
+    return hit;
+  }
+  const made = developFrameNow(photo, frame, scale, index, s);
+  frameCache.set(key, made);
+  if (frameCache.size > FRAME_CACHE_MAX) {
+    const oldest = frameCache.keys().next().value;
+    if (oldest !== undefined) frameCache.delete(oldest);
+  }
+  return made;
+}
+
+function developFrameNow(photo: Photo, frame: Frame, scale: number, index: number, s: Settings): HTMLCanvasElement {
   const w = Math.round(frame.w * scale);
   const h = Math.round(frame.h * scale);
   const c = makeCanvas(w, h);

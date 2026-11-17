@@ -98,6 +98,7 @@ export default function SharePreview({ photos, stickers, settings, placements, s
           width={PREVIEW_W}
           height={H}
           tabIndex={0}
+          role="application"
           aria-label={label}
           onKeyDown={onKeyDown}
           onContextMenu={(e) => e.preventDefault()}

@@ -140,7 +140,9 @@ export default function CameraDialog({ open, shots, timer, onDone, onClose, onEr
         </div>
         {flash > 0 && <div key={flash} className="cam-flash is-on" />}
       </div>
-      <p className="cam-status">{message}</p>
+      <p className="cam-status" role="status">
+        {message}
+      </p>
       <div className="row">
         {!running && (
           <button className="btn btn-primary" type="button" onClick={runSession}>

@@ -55,6 +55,5 @@ lib/
 ## Known limits
 
 - HEIC photos open only in Safari; convert to JPG elsewhere
-- Fonts load from Google Fonts; offline, the strip falls back to system fonts
 - No zoom inside a frame yet, only re-centring
 - Nothing is saved between visits

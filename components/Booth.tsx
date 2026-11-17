@@ -18,6 +18,8 @@ export default function Booth() {
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [status, setStatus] = useState('');
   const [instaStatus, setInstaStatus] = useState('');
+  /** Which download or share is being made right now: 'strip', 'insta', 'share' or 'strip-2'. */
+  const [busy, setBusy] = useState<string | null>(null);
   const [printKey, setPrintKey] = useState(0);
   const [camOpen, setCamOpen] = useState(false);
   const [canShare, setCanShare] = useState(false);
@@ -26,6 +28,8 @@ export default function Booth() {
     presetPlacements(DEFAULT_SETTINGS.copies, DEFAULT_SETTINGS.arrangement, DEFAULT_SETTINGS.format, DEFAULT_SETTINGS.layout),
   );
   const [selectedCopy, setSelectedCopy] = useState(0);
+  /** On a narrow stage only one strip shows at a time; this is the one. */
+  const [shownStrip, setShownStrip] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const pickFiles = useCallback(() => fileInput.current?.click(), []);
 
@@ -160,6 +164,18 @@ export default function Booth() {
     return '';
   };
 
+  /** Marks a button as working and lets the browser paint that before the heavy drawing starts. */
+  const whileBusy = async (what: string, work: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(what);
+    await new Promise<void>((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+    try {
+      await work();
+    } finally {
+      setBusy(null);
+    }
+  };
+
   // Strip downloads report in the panel; Instagram downloads report under their own buttons.
   const save = async (kind: SaveKind) => {
     const report = kind === 'strip' ? setStatus : setInstaStatus;
@@ -167,7 +183,9 @@ export default function Booth() {
       report('Add a photo first, then download.');
       return;
     }
-    report(await download(renderForSave(kind, photos, stickers, settings, placements), fileName(kind)));
+    await whileBusy(kind === 'strip' ? 'strip' : 'insta', async () => {
+      report(await download(renderForSave(kind, photos, stickers, settings, placements), fileName(kind)));
+    });
   };
 
   const share = async () => {
@@ -175,7 +193,10 @@ export default function Booth() {
       setInstaStatus('Add a photo first, then share.');
       return;
     }
-    const blob = await canvasToBlob(renderForSave(settings.format, photos, stickers, settings, placements));
+    let blob: Blob | null = null;
+    await whileBusy('share', async () => {
+      blob = await canvasToBlob(renderForSave(settings.format, photos, stickers, settings, placements));
+    });
     if (!blob) {
       setInstaStatus(MAKE_FAILED);
       return;
@@ -226,7 +247,9 @@ export default function Booth() {
   const downloadStrip = async (i: number) => {
     const strip = strips[i];
     if (!strip) return;
-    setStripStatus(await download(renderStrip(strip.photos, strip.stickers, settings, 2), `four-poses-strip-${i + 1}-${todayISO()}.png`));
+    await whileBusy(`strip-${i + 1}`, async () => {
+      setStripStatus(await download(renderStrip(strip.photos, strip.stickers, settings, 2), `four-poses-strip-${i + 1}-${todayISO()}.png`));
+    });
   };
 
   const closeCamera = useCallback(() => setCamOpen(false), []);
@@ -262,6 +285,7 @@ export default function Booth() {
           selectedCopy={selectedCopy}
           canShare={canShare}
           status={instaStatus}
+          busy={busy}
           slots={perStrip}
           onChange={update}
           onSelectCopy={setSelectedCopy}
@@ -279,9 +303,19 @@ export default function Booth() {
         />
         )}
 
+        <h2 className="sr-only">Your strips</h2>
+        {strips.length > 1 && (
+          <div className="choices strip-tabs" role="group" aria-label="Strip to show">
+            {strips.map((_, i) => (
+              <button key={i} type="button" className="btn btn-stage" aria-pressed={Math.min(shownStrip, strips.length - 1) === i} onClick={() => setShownStrip(i)}>
+                Strip {i + 1}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="chute" style={{ '--copies': strips.length } as React.CSSProperties}>
           <div className="slot" />
-          <div className="prints">
+          <div className="prints" data-show={Math.min(shownStrip, strips.length - 1) + 1}>
             {strips.map((strip, i) => (
               <figure className="print" key={i === 0 ? `strip-${printKey}` : `strip-${printKey}-${i}`}>
                 <StripCanvas
@@ -301,7 +335,7 @@ export default function Booth() {
                     <span>{strip.caption}</span>
                     {photos.length > 0 && (
                       <button className="btn btn-stage" type="button" aria-label={`Download strip ${i + 1}`} onClick={() => void downloadStrip(i)}>
-                        Download
+                        {busy === `strip-${i + 1}` ? 'Making…' : 'Download'}
                       </button>
                     )}
                   </figcaption>
@@ -319,7 +353,7 @@ export default function Booth() {
         <p className="hint">
           {photos.length === 0
             ? 'Tap or click an empty frame to add photos, or drop them anywhere on the page.'
-            : 'Drag a photo to re-centre it. Hold a photo, then drop it on another frame to swap them. Drag stickers to move them, double-click one to remove it.'}
+            : 'Drag a photo to re-centre it; on a touch screen, start the drag sideways. Hold a photo, then drop it on another frame to swap them. Drag stickers to move them, double-click one to remove it.'}
         </p>
         <input
           ref={fileInput}
@@ -341,6 +375,7 @@ export default function Booth() {
         status={status}
         stickers={stickers}
         stripsShown={strips.length}
+        saving={busy === 'strip'}
         onChange={update}
         onLayout={changeLayout}
         onPickFiles={pickFiles}

@@ -39,6 +39,8 @@ interface Props {
   stickers: Sticker[];
   /** How many strips are on the stage right now. */
   stripsShown: number;
+  /** True while the strip download is being made. */
+  saving: boolean;
   onChange: (patch: Partial<Settings>) => void;
   onLayout: (layout: LayoutKey) => void;
   onPickFiles: () => void;
@@ -197,7 +199,7 @@ export default function Panel(props: Props) {
       <div className="group group-save">
         <h2>Save</h2>
         <button className="btn btn-primary btn-download" type="button" onClick={() => props.onSave('strip')}>
-          {props.stripsShown > 1 ? 'Download strip 1' : 'Download strip'}
+          {props.saving ? 'Making image…' : props.stripsShown > 1 ? 'Download strip 1' : 'Download strip'}
         </button>
 
       </div>
