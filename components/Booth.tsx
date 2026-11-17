@@ -5,7 +5,6 @@ import CameraDialog from './CameraDialog';
 import InstaPlate from './InstaPlate';
 import Panel from './Panel';
 import StripCanvas from './StripCanvas';
-import StripCount from './StripCount';
 import { DEFAULT_SETTINGS, MAX_PHOTOS, slotCount } from '@/lib/options';
 import { loadFile, newId } from '@/lib/photos';
 import { canvasToBlob, clamp, geometry, photoSets, presetPlacements, renderForSave, renderStrip, todayISO } from '@/lib/render';
@@ -254,6 +253,7 @@ export default function Booth() {
           <p>Turn your photos into a photo booth strip. Nothing leaves this device.</p>
         </header>
 
+        {photos.length > 0 && (
         <InstaPlate
           settings={settings}
           photos={photos}
@@ -262,6 +262,7 @@ export default function Booth() {
           selectedCopy={selectedCopy}
           canShare={canShare}
           status={instaStatus}
+          slots={perStrip}
           onChange={update}
           onSelectCopy={setSelectedCopy}
           onMovePlacement={(copy, x, y) =>
@@ -276,8 +277,7 @@ export default function Booth() {
           onSave={(kind) => void save(kind)}
           onShare={() => void share()}
         />
-
-        {photos.length > 0 && <StripCount settings={settings} photos={photos} slots={perStrip} onChange={update} />}
+        )}
 
         <div className="chute" style={{ '--copies': strips.length } as React.CSSProperties}>
           <div className="slot" />
