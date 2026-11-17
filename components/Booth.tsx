@@ -206,7 +206,7 @@ export default function Booth() {
           ? 'Strip 1'
           : spare
             ? `Strip ${i + 1} · photos ${i * perStrip + 1}–${(i + 1) * perStrip}`
-            : `Strip ${i + 1} · copy of strip 1, edits change both`,
+            : `Strip ${i + 1} · copy of strip 1`,
     };
   });
 
@@ -300,8 +300,8 @@ export default function Booth() {
                   <figcaption>
                     <span>{strip.caption}</span>
                     {photos.length > 0 && (
-                      <button className="btn btn-stage" type="button" onClick={() => void downloadStrip(i)}>
-                        Download strip {i + 1}
+                      <button className="btn btn-stage" type="button" aria-label={`Download strip ${i + 1}`} onClick={() => void downloadStrip(i)}>
+                        Download
                       </button>
                     )}
                   </figcaption>
@@ -318,7 +318,7 @@ export default function Booth() {
 
         <p className="hint">
           {photos.length === 0
-            ? 'Click an empty frame to add photos, or drop them anywhere on the page.'
+            ? 'Tap or click an empty frame to add photos, or drop them anywhere on the page.'
             : 'Drag a photo to re-centre it. Hold a photo, then drop it on another frame to swap them. Drag stickers to move them, double-click one to remove it.'}
         </p>
         <input
@@ -340,6 +340,7 @@ export default function Booth() {
         photos={photos}
         status={status}
         stickers={stickers}
+        stripsShown={strips.length}
         onChange={update}
         onLayout={changeLayout}
         onPickFiles={pickFiles}

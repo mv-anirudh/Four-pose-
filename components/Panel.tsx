@@ -37,6 +37,8 @@ interface Props {
   photos: Photo[];
   status: string;
   stickers: Sticker[];
+  /** How many strips are on the stage right now. */
+  stripsShown: number;
   onChange: (patch: Partial<Settings>) => void;
   onLayout: (layout: LayoutKey) => void;
   onPickFiles: () => void;
@@ -53,7 +55,7 @@ function trayNote(count: number, slots: number): string {
   if (count === 0) return `Add up to ${MAX_PHOTOS} photos. The first ${slots} fill the strip.`;
   const spare = count - slots;
   if (spare > 0) {
-    return `The first ${slots} are on strip 1. Choose 2 or 3 strips above the strip to put spare photos on extra strips. Hold a photo and drag it to change its place.`;
+    return `The first ${slots} are on strip 1. Spare photos fill the extra strips when you print 2 or 3 strips. Hold a photo and drag it to change its place.`;
   }
   if (count < slots) return `This layout has room for ${slots - count} more.`;
   return 'The strip is full. Hold a photo and drag it to change its place.';
@@ -195,7 +197,7 @@ export default function Panel(props: Props) {
       <div className="group group-save">
         <h2>Save</h2>
         <button className="btn btn-primary btn-download" type="button" onClick={() => props.onSave('strip')}>
-          {settings.copies > 1 ? 'Download strip 1' : 'Download strip'}
+          {props.stripsShown > 1 ? 'Download strip 1' : 'Download strip'}
         </button>
 
       </div>

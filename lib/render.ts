@@ -185,7 +185,7 @@ export function renderStrip(photos: Photo[], stickers: Sticker[], s: Settings, s
       ctx.fillStyle = dark ? 'rgba(239, 233, 220, 0.12)' : 'rgba(27, 26, 23, 0.1)';
       ctx.fillRect(f.x, f.y, f.w, f.h);
       ctx.fillStyle = dark ? 'rgba(239, 233, 220, 0.6)' : 'rgba(27, 26, 23, 0.55)';
-      ctx.font = '26px "Special Elite", "Courier New", monospace';
+      ctx.font = '34px "Special Elite", "Courier New", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(`Pose ${i + 1}`, f.x + f.w / 2, f.y + f.h / 2);

@@ -13,6 +13,8 @@
 
 * { box-sizing: border-box; }
 
+::selection { background: var(--lamp); color: var(--ink); }
+
 html, body { margin: 0; height: 100%; }
 
 body {
@@ -106,17 +108,17 @@ body {
 /* Strip 1 and any extra strips stand side by side under one slot */
 .prints { display: flex; align-items: flex-start; justify-content: center; gap: 16px; }
 .print { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0; }
-.print figcaption { display: grid; justify-items: center; gap: 6px; font-size: 13px; line-height: 1.3; color: rgba(239, 233, 220, 0.72); text-align: center; text-wrap: balance; }
+.print figcaption { width: 0; min-width: 100%; display: grid; justify-items: center; gap: 8px; font-size: 13px; line-height: 1.3; color: rgba(239, 233, 220, 0.72); text-align: center; text-wrap: balance; }
 
 /* Controls that sit on the green stage itself: ivory lines on enamel, lamp when chosen */
 .strip-count { display: grid; justify-items: center; gap: 6px; margin: 0 0 14px; }
 .strip-count .choices { justify-content: center; margin: 0; }
 .strip-count .check { margin: 0; font-size: 14px; color: rgba(239, 233, 220, 0.86); text-wrap: balance; }
 .strip-count .check input { accent-color: var(--lamp); }
-.strip-count .btn, .btn-stage { color: var(--paper); border-color: rgba(239, 233, 220, 0.6); }
-.strip-count .btn:hover, .btn-stage:hover { background: rgba(239, 233, 220, 0.1); }
-.strip-count .btn[aria-pressed="true"] { background: var(--lamp); border-color: var(--lamp); color: var(--ink); }
-.btn-stage { font-size: 14px; padding: 6px 12px; }
+.stage .strip-count .btn, .stage .btn-stage { color: var(--paper); border-color: rgba(239, 233, 220, 0.6); }
+.stage .strip-count .btn:hover, .stage .btn-stage:hover { background: rgba(239, 233, 220, 0.12); }
+.stage .strip-count .btn[aria-pressed="true"] { background: var(--lamp); border-color: var(--lamp); color: var(--ink); }
+.btn-stage { font-size: 14px; padding: 6px 12px; max-width: 100%; }
 .stage-status { margin: 4px 0 0; font-weight: 600; color: var(--lamp); text-align: center; }
 
 /*
@@ -126,7 +128,7 @@ body {
 canvas.strip {
   --fit-h: calc((100cqw - 24px - (var(--copies, 1) - 1) * 16px) / var(--copies, 1) * var(--strip-h) / var(--strip-w));
   display: block;
-  height: min(calc(100vh - 230px), calc(520px * var(--strip-h) / var(--strip-w)), var(--fit-h));
+  height: min(calc(100vh - 340px), calc(520px * var(--strip-h) / var(--strip-w)), var(--fit-h));
   min-height: min(300px, var(--fit-h));
   width: auto;
   max-width: 100%;
@@ -185,6 +187,9 @@ canvas.strip.is-empty { cursor: pointer; }
   overflow-y: auto;
   position: sticky;
   top: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(27, 26, 23, 0.4) transparent;
+  caret-color: var(--curtain);
   /* Two screws holding the plate on */
   background:
     radial-gradient(circle at 16px 16px, #c9c3b4 0 5px, rgba(27, 26, 23, 0.45) 5px 6px, transparent 6.5px),
@@ -221,10 +226,13 @@ canvas.strip.is-empty { cursor: pointer; }
   padding: 9px 14px;
   min-height: 44px;
   cursor: pointer;
+  transition: background-color 0.15s ease-out, color 0.15s ease-out, border-color 0.15s ease-out;
 }
 .btn:hover { background: rgba(27, 26, 23, 0.08); }
+.btn:active { background: rgba(27, 26, 23, 0.16); }
 .btn-primary { background: var(--curtain); border-color: var(--curtain); color: var(--paper); }
 .btn-primary:hover { background: #761822; }
+.btn-primary:active { background: #63131b; }
 .btn-download { width: 100%; min-height: 52px; font-size: 17px; }
 
 /* Instagram image: an ivory plate on the stage, under the masthead */
@@ -244,9 +252,10 @@ canvas.strip.is-empty { cursor: pointer; }
 .plate :focus-visible { outline-color: var(--enamel); }
 .insta { padding-block: 12px; }
 .insta.is-open { padding-block: 18px 20px; }
-.insta-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding-inline: 8px; }
-.insta h2 { font-size: 19px; font-weight: 600; margin: 0; }
-.insta-summary { margin: 0; flex: 1; min-width: 12ch; font-size: 15px; color: rgba(27, 26, 23, 0.72); font-variant-numeric: tabular-nums; }
+.insta-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 14px; padding-inline: 8px; min-height: 44px; }
+.insta h2 { font-size: 19px; font-weight: 600; margin: 0; grid-column: 1; }
+.insta-summary { margin: 0; grid-column: 1; font-size: 15px; color: rgba(27, 26, 23, 0.72); font-variant-numeric: tabular-nums; }
+.insta-head .btn { grid-column: 2; grid-row: 1 / span 2; }
 .insta-cols { display: grid; gap: 16px; margin-top: 16px; }
 .insta-view, .insta-controls { display: grid; gap: 12px; align-content: start; min-width: 0; }
 @container (min-width: 640px) {
@@ -287,10 +296,9 @@ canvas.strip.is-empty { cursor: pointer; }
 .window-pick {
   position: absolute;
   pointer-events: none;
-  /* Ivory then ink, so the chosen strip shows on every backdrop colour */
-  outline: 2px dashed var(--ink);
-  outline-offset: 5px;
-  box-shadow: 0 0 0 3px var(--paper);
+  /* Lamp ring edged in ink, so the chosen strip shows on every backdrop colour */
+  border-radius: 1px;
+  box-shadow: 0 0 0 3px var(--lamp), 0 0 0 4.5px var(--ink);
 }
 .btn-quiet { justify-self: start; }
 .btn-quiet { border-color: transparent; text-decoration: underline; padding-left: 0; }
@@ -392,9 +400,10 @@ canvas.strip.is-empty { cursor: pointer; }
 .tray .tray-actions button {
   flex: 1;
   font: inherit;
-  font-size: 14px;
-  line-height: 1;
-  min-height: 30px;
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  padding: 0;
   background: transparent;
   color: var(--ink);
   border: 1.5px solid var(--ink);
@@ -470,11 +479,12 @@ canvas.strip.is-empty { cursor: pointer; }
   .prints { gap: 10px; }
   .print figcaption { font-size: 12px; }
   .panel { position: static; max-height: none; }
-  .field { grid-template-columns: 130px 1fr; }
+  .field:not(.field-stack, .field-inline) { grid-template-columns: 130px 1fr; }
+  .tray { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
 }
 
 @media (max-width: 520px) {
-  .field, .field-inline { grid-template-columns: 1fr; gap: 4px; }
+  .field:not(.field-stack), .field-inline { grid-template-columns: 1fr; gap: 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
