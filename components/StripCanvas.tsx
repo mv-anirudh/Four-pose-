@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { STICKERS } from '@/lib/options';
 import { clamp, ctx2d, geometry, renderStrip } from '@/lib/render';
 import type { Photo, Settings, Sticker } from '@/lib/types';
 
@@ -10,6 +11,8 @@ interface Props {
   settings: Settings;
   /** Plays the "strip drops out of the slot" animation when this mounts. */
   animate: boolean;
+  /** Accessible name, such as "Strip 2, photos 5 to 8". */
+  label?: string;
   onPanPhoto: (index: number, ox: number, oy: number) => void;
   onSwapPhotos: (from: number, to: number) => void;
   onMoveSticker: (id: number, x: number, y: number) => void;
@@ -22,10 +25,12 @@ interface Props {
 const HOLD_MS = 380;
 /** Movement (screen px) that turns a press into a pan instead of a lift. */
 const SLOP = 7;
+const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+const stickerName = (kind: string) => STICKERS.find((s) => s.key === kind)?.label ?? 'Sticker';
 
 type Drag =
   | { type: 'sticker'; id: number; x: number; y: number }
-  | { type: 'press'; index: number; x: number; y: number; cx: number; cy: number; timer: number }
+  | { type: 'press'; index: number; x: number; y: number; cx: number; cy: number; timer: number; touch: boolean }
   | { type: 'pan'; index: number; x: number; y: number }
   | { type: 'lift'; index: number };
 
@@ -42,6 +47,7 @@ export default function StripCanvas({
   stickers,
   settings,
   animate,
+  label = 'Preview of your photo strip',
   onPanPhoto,
   onSwapPhotos,
   onMoveSticker,
@@ -77,6 +83,19 @@ export default function StripCanvas({
     });
     return () => cancelAnimationFrame(frame);
   }, [photos, stickers, settings, fontTick]);
+
+  // The strip lets a touch swipe scroll the page (touch-action: pan-y). Once a photo or sticker
+  // is actually being moved, hold the gesture here so the page does not scroll under the finger.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const hold = (e: TouchEvent) => {
+      const d = drag.current;
+      if (d && d.type !== 'press' && e.cancelable) e.preventDefault();
+    };
+    canvas.addEventListener('touchmove', hold, { passive: false });
+    return () => canvas.removeEventListener('touchmove', hold);
+  }, []);
 
   // Clear any pending hold timer if the strip unmounts mid-press.
   useEffect(
@@ -116,7 +135,7 @@ export default function StripCanvas({
           setLift({ from: d.index, over: d.index, fx: d.x / g.W, fy: d.y / g.H });
           navigator.vibrate?.(12);
         }, HOLD_MS);
-        drag.current = { type: 'press', index, ...pt, cx: e.clientX, cy: e.clientY, timer };
+        drag.current = { type: 'press', index, ...pt, cx: e.clientX, cy: e.clientY, timer, touch: e.pointerType === 'touch' };
       } else if (index >= 0) {
         onEmptyFrame();
       }
@@ -135,8 +154,15 @@ export default function StripCanvas({
       return;
     }
     if (d.type === 'press') {
-      if (Math.hypot(e.clientX - d.cx, e.clientY - d.cy) < SLOP) return;
+      const mx = Math.abs(e.clientX - d.cx);
+      const my = Math.abs(e.clientY - d.cy);
+      if (Math.hypot(mx, my) < SLOP) return;
       clearTimeout(d.timer);
+      // A mostly vertical touch swipe is the visitor scrolling the page, not moving the photo.
+      if (d.touch && my > mx) {
+        drag.current = null;
+        return;
+      }
       drag.current = { type: 'pan', index: d.index, x: d.x, y: d.y };
     }
     const cur = drag.current;
@@ -178,6 +204,37 @@ export default function StripCanvas({
     const f = g.frames[i];
     return { left: `${(f.x / g.W) * 100}%`, top: `${(f.y / g.H) * 100}%`, width: `${(f.w / g.W) * 100}%`, height: `${(f.h / g.H) * 100}%` };
   };
+  /** Keyboard: arrow keys re-centre the photo in a frame (Shift for bigger steps). */
+  const nudgePhoto = (i: number, e: React.KeyboardEvent) => {
+    const step = ARROWS[e.key];
+    const p = photos[i];
+    const f = g.frames[i];
+    if (!step || !p || !f) return;
+    e.preventDefault();
+    const fit = Math.max(f.w / p.w, f.h / p.h);
+    const size = e.shiftKey ? 0.3 : 0.1;
+    onPanPhoto(
+      i,
+      p.w * fit - f.w > 0.5 ? clamp(p.ox - step[0] * size, -1, 1) : p.ox,
+      p.h * fit - f.h > 0.5 ? clamp(p.oy - step[1] * size, -1, 1) : p.oy,
+    );
+  };
+  /** Keyboard: arrow keys move a sticker, Delete or Backspace removes it. */
+  const nudgeSticker = (id: number, e: React.KeyboardEvent) => {
+    const s = stickers.find((st) => st.id === id);
+    if (!s) return;
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      onRemoveSticker(id);
+      return;
+    }
+    const step = ARROWS[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const size = e.shiftKey ? 40 : 10;
+    onMoveSticker(id, clamp(s.x + step[0] * size, 0, g.W), clamp(s.y + step[1] * size, 0, g.H));
+  };
+
   const lifted = lift ? photos[lift.from] : null;
   const fw = lift ? g.frames[lift.from].w / g.W : 0;
 
@@ -186,12 +243,12 @@ export default function StripCanvas({
       <div className={lift ? 'strip-holder is-lifting' : 'strip-holder'}>
         <canvas
           ref={canvasRef}
-          id="strip"
-          className={photos.length < g.frames.length ? 'is-empty' : undefined}
+          className={photos.length < g.frames.length ? 'strip is-empty' : 'strip'}
           style={{ '--strip-w': g.W, '--strip-h': g.H } as React.CSSProperties}
           width={g.W}
           height={g.H}
-          aria-label="Preview of your photo strip"
+          role="img"
+          aria-label={label}
           onContextMenu={(e) => e.preventDefault()}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -202,6 +259,43 @@ export default function StripCanvas({
             if (s) onRemoveSticker(s.id);
           }}
         />
+        {/* Keyboard handles: they sit over each frame and sticker but let the pointer through to the canvas. */}
+        {g.frames.map((_, i) =>
+          photos[i] ? (
+            <button
+              key={`f${i}`}
+              type="button"
+              className="strip-key"
+              style={box(i)}
+              aria-label={`Photo ${i + 1}. Use the arrow keys to re-centre it.`}
+              onKeyDown={(e) => nudgePhoto(i, e)}
+            />
+          ) : (
+            <button
+              key={`f${i}`}
+              type="button"
+              className="strip-key"
+              style={box(i)}
+              aria-label={`Empty frame ${i + 1}. Add photos.`}
+              onClick={onEmptyFrame}
+            />
+          ),
+        )}
+        {stickers.map((s) => (
+          <button
+            key={`s${s.id}`}
+            type="button"
+            className="strip-key strip-key-sticker"
+            style={{
+              left: `${((s.x - s.size / 2) / g.W) * 100}%`,
+              top: `${((s.y - s.size / 2) / g.H) * 100}%`,
+              width: `${(s.size / g.W) * 100}%`,
+              height: `${(s.size / g.H) * 100}%`,
+            }}
+            aria-label={`${stickerName(s.kind)} sticker. Arrow keys move it, Delete removes it.`}
+            onKeyDown={(e) => nudgeSticker(s.id, e)}
+          />
+        ))}
         {lift && (
           <>
             <span className="frame-mark frame-from" style={box(lift.from)} aria-hidden="true" />

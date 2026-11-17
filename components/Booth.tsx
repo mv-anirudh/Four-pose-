@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import CameraDialog from './CameraDialog';
+import InstaPlate from './InstaPlate';
 import Panel from './Panel';
-import PrintCopy from './PrintCopy';
 import StripCanvas from './StripCanvas';
 import { DEFAULT_SETTINGS, MAX_PHOTOS, slotCount } from '@/lib/options';
 import { loadFile, newId } from '@/lib/photos';
-import { canvasToBlob, clamp, geometry, photoSets, presetPlacements, renderForSave, todayISO } from '@/lib/render';
+import { canvasToBlob, clamp, geometry, photoSets, presetPlacements, renderForSave, renderStrip, todayISO } from '@/lib/render';
 import type { LayoutKey, Photo, Placement, SaveKind, Settings, Sticker, StickerKey } from '@/lib/types';
 
 const fileName = (kind: SaveKind) => `four-poses-${kind}-${todayISO()}.png`;
@@ -17,6 +17,9 @@ export default function Booth() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [stickers, setStickers] = useState<Sticker[]>([]);
   const [status, setStatus] = useState('');
+  const [instaStatus, setInstaStatus] = useState('');
+  /** Which download or share is being made right now: 'strip', 'insta', 'share' or 'strip-2'. */
+  const [busy, setBusy] = useState<string | null>(null);
   const [printKey, setPrintKey] = useState(0);
   const [camOpen, setCamOpen] = useState(false);
   const [canShare, setCanShare] = useState(false);
@@ -25,6 +28,8 @@ export default function Booth() {
     presetPlacements(DEFAULT_SETTINGS.copies, DEFAULT_SETTINGS.arrangement, DEFAULT_SETTINGS.format, DEFAULT_SETTINGS.layout),
   );
   const [selectedCopy, setSelectedCopy] = useState(0);
+  /** On a narrow stage only one strip shows at a time; this is the one. */
+  const [shownStrip, setShownStrip] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const pickFiles = useCallback(() => fileInput.current?.click(), []);
 
@@ -142,59 +147,110 @@ export default function Booth() {
     ]);
   };
 
-  const save = async (kind: SaveKind) => {
-    if (!photos.length) {
-      setStatus('Add a photo first, then download.');
-      return;
-    }
-    const blob = await canvasToBlob(renderForSave(kind, photos, stickers, settings, placements));
-    if (!blob) {
-      setStatus("The image couldn't be made. Try a smaller layout or fewer effects.");
-      return;
-    }
+  const MAKE_FAILED = "The image couldn't be made. Try a smaller layout or fewer effects.";
+
+  /** Saves a finished canvas as a PNG download. Returns an error message, or '' when it worked. */
+  const download = async (canvas: HTMLCanvasElement, name: string): Promise<string> => {
+    const blob = await canvasToBlob(canvas);
+    if (!blob) return MAKE_FAILED;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = fileName(kind);
+    a.download = name;
     document.body.append(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
-    setStatus('');
+    return '';
+  };
+
+  /** Marks a button as working and lets the browser paint that before the heavy drawing starts. */
+  const whileBusy = async (what: string, work: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(what);
+    await new Promise<void>((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+    try {
+      await work();
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Strip downloads report in the panel; Instagram downloads report under their own buttons.
+  const save = async (kind: SaveKind) => {
+    const report = kind === 'strip' ? setStatus : setInstaStatus;
+    if (!photos.length) {
+      report('Add a photo first, then download.');
+      return;
+    }
+    await whileBusy(kind === 'strip' ? 'strip' : 'insta', async () => {
+      report(await download(renderForSave(kind, photos, stickers, settings, placements), fileName(kind)));
+    });
   };
 
   const share = async () => {
     if (!photos.length) {
-      setStatus('Add a photo first, then share.');
+      setInstaStatus('Add a photo first, then share.');
       return;
     }
-    const blob = await canvasToBlob(renderForSave(settings.format, photos, stickers, settings, placements));
+    let blob: Blob | null = null;
+    await whileBusy('share', async () => {
+      blob = await canvasToBlob(renderForSave(settings.format, photos, stickers, settings, placements));
+    });
     if (!blob) {
-      setStatus("The image couldn't be made. Try a smaller layout or fewer effects.");
+      setInstaStatus(MAKE_FAILED);
       return;
     }
+    setInstaStatus('');
     try {
       await navigator.share({ files: [new File([blob], fileName(settings.format), { type: 'image/png' })], title: 'Photo strip' });
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError')) {
-        setStatus("Sharing didn't work here. Download the image and share it from your gallery.");
+        setInstaStatus("Sharing didn't work here. Download the image and share it from your gallery.");
       }
     }
   };
 
-  // Extra strips from the Strips setting drop out beside strip 1 once there are photos,
-  // using the same photo sets as the Instagram image (stickers only repeat on exact copies).
+  // Every strip from the Strips setting is shown on the stage and can be edited there.
+  // A strip of spare photos edits those photos; a copy of strip 1 edits strip 1's photos,
+  // so the copy and strip 1 always match (stickers only belong to strip 1 and its copies).
   const perStrip = slotCount(settings.layout);
-  const extraStrips = photos.length
-    ? photoSets(photos, settings)
-        .slice(1)
-        .map((set, i) => ({
-          ...set,
-          caption: set.duplicate
-            ? `Strip ${i + 2} · copy of strip 1`
-            : `Strip ${i + 2} · photos ${(i + 1) * perStrip + 1}–${(i + 2) * perStrip}`,
-        }))
-    : [];
+  const strips = (photos.length ? photoSets(photos, settings) : [{ photos, duplicate: false }]).map((set, i) => {
+    const spare = i > 0 && !set.duplicate;
+    return {
+      photos: set.photos,
+      offset: spare ? i * perStrip : 0,
+      stickers: spare ? [] : stickers,
+      caption:
+        i === 0
+          ? 'Strip 1'
+          : spare
+            ? `Strip ${i + 1} · photos ${i * perStrip + 1}–${(i + 1) * perStrip}`
+            : `Strip ${i + 1} · copy of strip 1`,
+    };
+  });
+
+  const panPhoto = (index: number, ox: number, oy: number) =>
+    setPhotos((list) => list.map((p, i) => (i === index ? { ...p, ox, oy } : p)));
+  const swapPhotos = (from: number, to: number) =>
+    setPhotos((list) => {
+      const next = [...list];
+      [next[from], next[to]] = [next[to], next[from]];
+      return next;
+    });
+  const moveSticker = (id: number, x: number, y: number) =>
+    setStickers((list) => list.map((s) => (s.id === id ? { ...s, x, y } : s)));
+  const removeSticker = (id: number) => setStickers((list) => list.filter((s) => s.id !== id));
+
+  // Each strip on the stage downloads on its own, drawn at export size like strip 1.
+  const [stripStatus, setStripStatus] = useState('');
+  const downloadStrip = async (i: number) => {
+    const strip = strips[i];
+    if (!strip) return;
+    await whileBusy(`strip-${i + 1}`, async () => {
+      setStripStatus(await download(renderStrip(strip.photos, strip.stickers, settings, 2), `four-poses-strip-${i + 1}-${todayISO()}.png`));
+    });
+  };
 
   const closeCamera = useCallback(() => setCamOpen(false), []);
   const cameraError = useCallback((message: string) => {
@@ -220,46 +276,84 @@ export default function Booth() {
           <p>Turn your photos into a photo booth strip. Nothing leaves this device.</p>
         </header>
 
-        <div className="chute" style={{ '--copies': extraStrips.length + 1 } as React.CSSProperties}>
+        {photos.length > 0 && (
+        <InstaPlate
+          settings={settings}
+          photos={photos}
+          stickers={stickers}
+          placements={placements}
+          selectedCopy={selectedCopy}
+          canShare={canShare}
+          status={instaStatus}
+          busy={busy}
+          slots={perStrip}
+          onChange={update}
+          onSelectCopy={setSelectedCopy}
+          onMovePlacement={(copy, x, y) =>
+            setPlacements((list) => {
+              // The strip being moved comes to the front.
+              const p = list.find((q) => q.copy === copy);
+              return p ? [...list.filter((q) => q.copy !== copy), { ...p, x, y }] : list;
+            })
+          }
+          onTilt={(copy, rot) => setPlacements((list) => list.map((p) => (p.copy === copy ? { ...p, rot } : p)))}
+          onResetPlacements={resetPlacements}
+          onSave={(kind) => void save(kind)}
+          onShare={() => void share()}
+        />
+        )}
+
+        <h2 className="sr-only">Your strips</h2>
+        {strips.length > 1 && (
+          <div className="choices strip-tabs" role="group" aria-label="Strip to show">
+            {strips.map((_, i) => (
+              <button key={i} type="button" className="btn btn-stage" aria-pressed={Math.min(shownStrip, strips.length - 1) === i} onClick={() => setShownStrip(i)}>
+                Strip {i + 1}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="chute" style={{ '--copies': strips.length } as React.CSSProperties}>
           <div className="slot" />
-          <div className="prints">
-            <figure className="print">
-              <StripCanvas
-                key={printKey}
-                animate={printKey > 0}
-                photos={photos}
-                stickers={stickers}
-                settings={settings}
-                onPanPhoto={(index, ox, oy) => setPhotos((list) => list.map((p, i) => (i === index ? { ...p, ox, oy } : p)))}
-                onSwapPhotos={(from, to) =>
-                  setPhotos((list) => {
-                    const next = [...list];
-                    [next[from], next[to]] = [next[to], next[from]];
-                    return next;
-                  })
-                }
-                onMoveSticker={(id, x, y) => setStickers((list) => list.map((s) => (s.id === id ? { ...s, x, y } : s)))}
-                onRemoveSticker={(id) => setStickers((list) => list.filter((s) => s.id !== id))}
-                onEmptyFrame={pickFiles}
-              />
-              {extraStrips.length > 0 && <figcaption>Strip 1 · edit this one</figcaption>}
-            </figure>
-            {extraStrips.map((set, i) => (
-              <PrintCopy
-                key={`${printKey}-${i}`}
-                photos={set.photos}
-                stickers={set.duplicate ? stickers : []}
-                settings={settings}
-                caption={set.caption}
-              />
+          <div className="prints" data-show={Math.min(shownStrip, strips.length - 1) + 1}>
+            {strips.map((strip, i) => (
+              <figure className="print" key={i === 0 ? `strip-${printKey}` : `strip-${printKey}-${i}`}>
+                <StripCanvas
+                  animate={i > 0 || printKey > 0}
+                  label={strips.length > 1 ? strip.caption : undefined}
+                  photos={strip.photos}
+                  stickers={strip.stickers}
+                  settings={settings}
+                  onPanPhoto={(index, ox, oy) => panPhoto(index + strip.offset, ox, oy)}
+                  onSwapPhotos={(from, to) => swapPhotos(from + strip.offset, to + strip.offset)}
+                  onMoveSticker={moveSticker}
+                  onRemoveSticker={removeSticker}
+                  onEmptyFrame={pickFiles}
+                />
+                {strips.length > 1 && (
+                  <figcaption>
+                    <span>{strip.caption}</span>
+                    {photos.length > 0 && (
+                      <button className="btn btn-stage" type="button" aria-label={`Download strip ${i + 1}`} onClick={() => void downloadStrip(i)}>
+                        {busy === `strip-${i + 1}` ? 'Making…' : 'Download'}
+                      </button>
+                    )}
+                  </figcaption>
+                )}
+              </figure>
             ))}
           </div>
         </div>
+        {stripStatus && (
+          <p className="stage-status" role="status">
+            {stripStatus}
+          </p>
+        )}
 
         <p className="hint">
           {photos.length === 0
-            ? 'Click an empty frame to add photos, or drop them anywhere on the page.'
-            : 'Drag a photo to re-centre it. Hold a photo, then drop it on another frame to swap them. Drag stickers to move them, double-click one to remove it.'}
+            ? 'Tap or click an empty frame to add photos, or drop them anywhere on the page.'
+            : 'Drag a photo to re-centre it; on a touch screen, start the drag sideways. Hold a photo, then drop it on another frame to swap them. Drag stickers to move them, double-click one to remove it.'}
         </p>
         <input
           ref={fileInput}
@@ -280,9 +374,8 @@ export default function Booth() {
         photos={photos}
         status={status}
         stickers={stickers}
-        placements={placements}
-        selectedCopy={selectedCopy}
-        canShare={canShare}
+        stripsShown={strips.length}
+        saving={busy === 'strip'}
         onChange={update}
         onLayout={changeLayout}
         onPickFiles={pickFiles}
@@ -306,21 +399,10 @@ export default function Booth() {
             return next;
           })
         }
-        onSelectCopy={setSelectedCopy}
-        onMovePlacement={(copy, x, y) =>
-          setPlacements((list) => {
-            // The strip being moved comes to the front.
-            const p = list.find((q) => q.copy === copy);
-            return p ? [...list.filter((q) => q.copy !== copy), { ...p, x, y }] : list;
-          })
-        }
-        onTilt={(copy, rot) => setPlacements((list) => list.map((p) => (p.copy === copy ? { ...p, rot } : p)))}
-        onResetPlacements={resetPlacements}
         onRemovePhoto={(i) => setPhotos((list) => list.filter((_, n) => n !== i))}
         onAddSticker={addSticker}
         onClearStickers={() => setStickers([])}
         onSave={(kind) => void save(kind)}
-        onShare={() => void share()}
       />
 
       <CameraDialog

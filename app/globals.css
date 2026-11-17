@@ -5,6 +5,11 @@
   --curtain: #8e1f2b;
   --lamp: #e9ae3f;
   --ink: #1b1a17;
+  /* Supporting shades of the five booth colours */
+  --curtain-dark: #761822;
+  --curtain-deep: #63131b;
+  --field: #fbf8f1;
+  --screw: #c9c3b4;
   /* Polished steel trim between the booth's panels */
   --chrome: linear-gradient(90deg, #6f7a76 0%, #d9ddd8 35%, #8b9591 55%, #e8ebe6 75%, #6a7470 100%);
   --ui: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
@@ -13,13 +18,15 @@
 
 * { box-sizing: border-box; }
 
+::selection { background: var(--lamp); color: var(--ink); }
+
 html, body { margin: 0; height: 100%; }
 
 body {
   background: var(--enamel);
   color: var(--paper);
   font-family: var(--ui);
-  font-size: 16px;
+  font-size: 100%;
   line-height: 1.45;
 }
 
@@ -44,7 +51,7 @@ body {
 }
 .sign span {
   font-family: var(--sign);
-  font-size: 44px;
+  font-size: 2.75rem;
   line-height: 1;
   color: var(--lamp);
   writing-mode: vertical-rl;
@@ -70,7 +77,7 @@ body {
 .masthead h1 {
   font-family: var(--sign);
   font-weight: 400;
-  font-size: clamp(30px, 4vw, 46px);
+  font-size: clamp(1.875rem, 4vw, 2.875rem);
   line-height: 1.05;
   margin: 0 0 6px;
   color: var(--paper);
@@ -106,30 +113,56 @@ body {
 /* Strip 1 and any extra strips stand side by side under one slot */
 .prints { display: flex; align-items: flex-start; justify-content: center; gap: 16px; }
 .print { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0; }
-.print figcaption { font-size: 13px; line-height: 1.3; color: rgba(239, 233, 220, 0.72); text-align: center; text-wrap: balance; }
+.print figcaption { width: 0; min-width: 100%; display: grid; justify-items: center; gap: 8px; font-size: 0.8125rem; line-height: 1.3; color: rgba(239, 233, 220, 0.72); text-align: center; text-wrap: balance; }
+
+/* Buttons that sit on the green stage itself: ivory lines on enamel */
+.stage .btn-stage { color: var(--paper); border-color: rgba(239, 233, 220, 0.6); }
+.stage .btn-stage:hover { background: rgba(239, 233, 220, 0.12); }
+.stage .btn-stage[aria-pressed="true"] { background: var(--lamp); border-color: var(--lamp); color: var(--ink); }
+/* On a narrow stage the strips take turns at full size; these buttons pick which one shows */
+.choices.strip-tabs { display: none; justify-content: center; margin: 0 0 12px; }
+@container (max-width: 520px) {
+  .choices.strip-tabs { display: flex; }
+  .prints { --copies: 1; }
+  .prints[data-show="1"] > .print:not(:nth-child(1)),
+  .prints[data-show="2"] > .print:not(:nth-child(2)),
+  .prints[data-show="3"] > .print:not(:nth-child(3)) { display: none; }
+}
+.btn-stage { font-size: 0.875rem; padding: 6px 12px; max-width: 100%; }
+.stage-status { margin: 4px 0 0; font-weight: 600; color: var(--lamp); text-align: center; }
 
 /*
  * Every strip is sized from its height so the slot above can hug the real width.
  * --fit-h is the tallest a strip can be while all of them (--copies) fit across the stage.
  */
-#strip, .print-copy {
+canvas.strip {
   --fit-h: calc((100cqw - 24px - (var(--copies, 1) - 1) * 16px) / var(--copies, 1) * var(--strip-h) / var(--strip-w));
   display: block;
-  height: min(calc(100vh - 230px), calc(520px * var(--strip-h) / var(--strip-w)), var(--fit-h));
+  height: min(calc(100vh - 340px), calc(520px * var(--strip-h) / var(--strip-w)), var(--fit-h));
   min-height: min(300px, var(--fit-h));
   width: auto;
   max-width: 100%;
-}
-#strip {
-  touch-action: none;
+  /* A vertical swipe scrolls the page; StripCanvas keeps the gesture once something is being moved */
+  touch-action: pan-y;
   cursor: grab;
 }
-#strip:active { cursor: grabbing; }
-#strip.is-empty { cursor: pointer; }
+/* Keyboard handles over frames and stickers: invisible, and the pointer passes through to the canvas */
+.strip-key {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  pointer-events: none;
+}
+.strip-key:focus-visible { outline: 3px solid var(--lamp); outline-offset: -3px; box-shadow: 0 0 0 5px rgba(27, 26, 23, 0.55) inset; }
+.strip-key-sticker:focus-visible { outline-offset: 2px; box-shadow: none; }
+canvas.strip:active { cursor: grabbing; }
+canvas.strip.is-empty { cursor: pointer; }
 
 /* Holds the strip and the pick-up overlays in the same coordinate box */
 .strip-holder { position: relative; display: block; max-width: 100%; }
-.strip-holder.is-lifting #strip { cursor: grabbing; }
+.strip-holder.is-lifting canvas.strip { cursor: grabbing; }
 .frame-mark {
   position: absolute;
   pointer-events: none;
@@ -158,7 +191,7 @@ body {
 .hint {
   max-width: 46ch;
   text-align: center;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: rgba(239, 233, 220, 0.72);
   margin: 4px 0 0;
 }
@@ -174,15 +207,18 @@ body {
   overflow-y: auto;
   position: sticky;
   top: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(27, 26, 23, 0.4) transparent;
+  caret-color: var(--curtain);
   /* Two screws holding the plate on */
   background:
-    radial-gradient(circle at 16px 16px, #c9c3b4 0 5px, rgba(27, 26, 23, 0.45) 5px 6px, transparent 6.5px),
-    radial-gradient(circle at calc(100% - 16px) 16px, #c9c3b4 0 5px, rgba(27, 26, 23, 0.45) 5px 6px, transparent 6.5px),
+    radial-gradient(circle at 16px 16px, var(--screw) 0 5px, rgba(27, 26, 23, 0.45) 5px 6px, transparent 6.5px),
+    radial-gradient(circle at calc(100% - 16px) 16px, var(--screw) 0 5px, rgba(27, 26, 23, 0.45) 5px 6px, transparent 6.5px),
     var(--paper);
 }
 .group { padding: 16px 0; border-bottom: 1.5px solid rgba(27, 26, 23, 0.16); }
 .group-save { border-bottom: 0; }
-.group h2 { font-size: 19px; font-weight: 600; margin: 0 0 10px; }
+.group h2 { font-size: 1.1875rem; font-weight: 600; margin: 0 0 10px; }
 
 .status {
   margin: 0;
@@ -197,7 +233,7 @@ body {
   background: #f7e3df;
 }
 
-.note { font-size: 14px; margin: 8px 0; color: rgba(27, 26, 23, 0.72); }
+.note { font-size: 0.875rem; margin: 8px 0; color: rgba(27, 26, 23, 0.72); }
 .row { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .btn {
@@ -208,30 +244,54 @@ body {
   border: 1.5px solid var(--ink);
   border-radius: 6px;
   padding: 9px 14px;
-  min-height: 42px;
+  min-height: 44px;
   cursor: pointer;
+  transition: background-color 0.15s ease-out, color 0.15s ease-out, border-color 0.15s ease-out;
 }
 .btn:hover { background: rgba(27, 26, 23, 0.08); }
+.btn:active { background: rgba(27, 26, 23, 0.16); }
 .btn-primary { background: var(--curtain); border-color: var(--curtain); color: var(--paper); }
-.btn-primary:hover { background: #761822; }
-.btn-download { width: 100%; min-height: 52px; font-size: 17px; }
+.btn-primary:hover { background: var(--curtain-dark); }
+.btn-primary:active { background: var(--curtain-deep); }
+.btn-download { width: 100%; min-height: 52px; font-size: 1.0625rem; }
 
-/* Instagram image: size, live preview, strips, backdrop, then the download */
-.insta {
-  display: grid;
-  gap: 12px;
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1.5px solid rgba(27, 26, 23, 0.16);
+/* Instagram image: an ivory plate on the stage, under the masthead */
+.plate {
+  width: min(100%, 760px);
+  margin: 0 0 24px;
+  padding: 18px 22px 20px;
+  border-radius: 6px;
+  color: var(--ink);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3);
+  /* Two screws holding the plate on, like the control plate */
+  background:
+    radial-gradient(circle at 14px 14px, var(--screw) 0 4px, rgba(27, 26, 23, 0.45) 4px 5px, transparent 5.5px),
+    radial-gradient(circle at calc(100% - 14px) 14px, var(--screw) 0 4px, rgba(27, 26, 23, 0.45) 4px 5px, transparent 5.5px),
+    var(--paper);
 }
-.insta h3 { font-size: 16px; font-weight: 600; margin: 0; }
+.plate :focus-visible { outline-color: var(--enamel); }
+/* One bar: strip count on the left, the Instagram button on the right */
+.insta { padding-block: 14px; }
+.insta.is-open { padding-block: 14px 20px; }
+.plate-bar { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 16px; padding-inline: 6px; }
+.strip-count { display: grid; gap: 2px; min-width: 0; }
+.strip-count .choices { margin: 0; }
+.strip-count .check { margin: 0; font-size: 0.875rem; color: rgba(27, 26, 23, 0.78); }
+.insta-body { margin-top: 14px; padding-top: 16px; border-top: 1.5px solid rgba(27, 26, 23, 0.16); }
+.insta-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+.insta h2 { font-size: 1.1875rem; font-weight: 600; margin: 0; }
+.insta-summary { margin: 0; font-size: 0.9375rem; color: rgba(27, 26, 23, 0.72); font-variant-numeric: tabular-nums; }
+.insta-cols { display: grid; gap: 16px; margin-top: 14px; }
+.insta-view, .insta-controls { display: grid; gap: 12px; align-content: start; min-width: 0; }
+@container (min-width: 640px) {
+  .insta-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; }
+}
 .insta .note { margin: -4px 0 0; }
 .insta .field, .insta .check { margin-top: 0; }
 .insta .choices { margin-bottom: 0; }
-.ratio { font-weight: 400; font-size: 13px; opacity: 0.7; font-variant-numeric: tabular-nums; }
+.ratio { font-weight: 400; font-size: 0.8125rem; opacity: 0.7; font-variant-numeric: tabular-nums; }
 .insta-actions { display: flex; gap: 8px; }
 .btn-wide { flex: 1; }
-.insta .btn-quiet { justify-self: start; min-height: 36px; }
 
 /* The sample-photo window on the outside of the booth: a steel frame around glass */
 .window {
@@ -261,18 +321,18 @@ body {
 .window-pick {
   position: absolute;
   pointer-events: none;
-  outline: 2px dashed var(--lamp);
-  outline-offset: 3px;
+  /* Lamp ring edged in ink, so the chosen strip shows on every backdrop colour */
+  border-radius: 1px;
+  box-shadow: 0 0 0 3px var(--lamp), 0 0 0 4.5px var(--ink);
 }
-.btn-quiet { justify-self: start; min-height: 36px; }
-.btn-quiet { border-color: transparent; text-decoration: underline; padding-left: 0; }
+.btn-quiet { justify-self: start; border-color: transparent; text-decoration: underline; padding-left: 0; }
 .btn[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 
 :focus-visible { outline: 3px solid var(--lamp); outline-offset: 2px; }
 .panel :focus-visible { outline-color: var(--enamel); }
 
 .choices { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.choices .btn { padding: 7px 12px; min-height: 38px; }
+.choices .btn { padding: 7px 12px; min-height: 44px; }
 
 .field {
   display: grid;
@@ -280,7 +340,7 @@ body {
   align-items: center;
   gap: 10px;
   margin-top: 10px;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 .field-stack { grid-template-columns: 1fr; gap: 4px; }
 .field-inline { grid-template-columns: auto 1fr; }
@@ -288,20 +348,20 @@ body {
 .field input[type="text"], .field input[type="date"], .field select {
   font: inherit;
   color: var(--ink);
-  background: #fbf8f1;
+  background: var(--field);
   border: 1.5px solid var(--ink);
   border-radius: 6px;
   padding: 8px 10px;
   min-height: 42px;
   width: 100%;
 }
-.check { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.check { display: flex; align-items: center; gap: 8px; margin-top: 12px; min-height: 44px; cursor: pointer; }
 .check input { width: 18px; height: 18px; accent-color: var(--curtain); }
 
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
 .swatch {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 1.5px solid var(--ink);
   cursor: pointer;
@@ -319,8 +379,6 @@ body {
   object-fit: cover;
   border-radius: 4px;
   border: 1.5px solid var(--ink);
-}
-.tray img {
   touch-action: pan-y;
   cursor: grab;
   user-select: none;
@@ -337,7 +395,7 @@ body {
   border-radius: 10px;
   background: var(--ink);
   color: var(--paper);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   line-height: 20px;
   text-align: center;
@@ -353,7 +411,7 @@ body {
   width: 72px;
   aspect-ratio: 1;
   object-fit: cover;
-  border: 4px solid #fbf8f1;
+  border: 4px solid var(--field);
   box-shadow: 0 12px 20px rgba(0, 0, 0, 0.35);
   transform: translate(-50%, -60%) rotate(-5deg);
   pointer-events: none;
@@ -363,9 +421,10 @@ body {
 .tray .tray-actions button {
   flex: 1;
   font: inherit;
-  font-size: 14px;
-  line-height: 1;
-  min-height: 30px;
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  padding: 0;
   background: transparent;
   color: var(--ink);
   border: 1.5px solid var(--ink);
@@ -390,7 +449,7 @@ body {
   place-items: center;
   width: 44px;
   height: 44px;
-  background: #fbf8f1;
+  background: var(--field);
   border: 1.5px solid var(--ink);
   border-radius: 6px;
   cursor: pointer;
@@ -417,7 +476,7 @@ body {
   display: grid;
   place-items: center;
   font-family: var(--sign);
-  font-size: 140px;
+  font-size: 8.75rem;
   color: var(--lamp);
   text-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
   pointer-events: none;
@@ -435,17 +494,18 @@ body {
   .booth { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 6px auto 6px auto; }
   .trim { background: linear-gradient(180deg, #6f7a76, #e8ebe6 45%, #8b9591); }
   .sign { padding: 10px 0; }
-  .sign span { writing-mode: horizontal-tb; font-size: 30px; position: static; letter-spacing: 0.2em; }
+  .sign span { writing-mode: horizontal-tb; font-size: 1.875rem; position: static; letter-spacing: 0.2em; }
   .stage { padding: 20px 14px 24px; }
-  #strip, .print-copy { height: min(68vh, calc(78vw * var(--strip-h) / var(--strip-w)), var(--fit-h)); }
+  canvas.strip { height: min(68vh, calc(78vw * var(--strip-h) / var(--strip-w)), var(--fit-h)); }
   .prints { gap: 10px; }
-  .print figcaption { font-size: 12px; }
+  .print figcaption { font-size: 0.75rem; }
   .panel { position: static; max-height: none; }
-  .field { grid-template-columns: 130px 1fr; }
+  .field:not(.field-stack, .field-inline) { grid-template-columns: 130px 1fr; }
+  .tray { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
 }
 
 @media (max-width: 520px) {
-  .field, .field-inline { grid-template-columns: 1fr; gap: 4px; }
+  .field:not(.field-stack), .field-inline { grid-template-columns: 1fr; gap: 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

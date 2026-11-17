@@ -20,12 +20,14 @@ const PREVIEW_W = 540;
 
 /**
  * Live preview of the Instagram image, drawn with the same code as the download.
- * Drag a strip to move it; the one you touched last is the one Tilt changes.
+ * Drag a strip to move it, or focus the preview and use the arrow keys (Shift for bigger steps).
+ * The selected strip is the one Tilt changes and the arrow keys move.
  */
 export default function SharePreview({ photos, stickers, settings, placements, selected, onSelect, onMove }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   const drag = useRef<{ copy: number; dx: number; dy: number } | null>(null);
   const [fontTick, setFontTick] = useState(0);
+  const [said, setSaid] = useState('');
   const f = FORMATS[settings.format];
   const H = Math.round((PREVIEW_W * f.h) / f.w);
   const aspect = stripAspect(settings.layout);
@@ -68,7 +70,25 @@ export default function SharePreview({ photos, stickers, settings, placements, s
     return null;
   };
 
-  const selectedPlacement = placements.find((p) => p.copy === selected);
+  const selectedPlacement = placements.find((p) => p.copy === selected) ?? placements[0];
+
+  const STEPS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+  const onKeyDown = (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+    const step = STEPS[e.key];
+    const p = selectedPlacement;
+    if (!step || !p) return;
+    e.preventDefault();
+    const size = e.shiftKey ? 0.05 : 0.01;
+    const x = clamp(p.x + step[0] * size, 0.04, 0.96);
+    const y = clamp(p.y + step[1] * size, 0.04, 0.96);
+    onMove(p.copy, x, y);
+    const name = placements.length > 1 ? `Strip ${p.copy + 1}` : 'Strip';
+    setSaid(`${name} at ${Math.round(x * 100)}% across, ${Math.round(y * 100)}% down.`);
+  };
+  const stripCount = `${placements.length} ${placements.length === 1 ? 'strip' : 'strips'}`;
+  const label =
+    `Preview of your Instagram ${f.label.toLowerCase()} with ${stripCount}.` +
+    (selectedPlacement ? ` Arrow keys move ${placements.length > 1 ? `strip ${selectedPlacement.copy + 1}` : 'the strip'}.` : '');
 
   return (
     <div className="window">
@@ -77,7 +97,10 @@ export default function SharePreview({ photos, stickers, settings, placements, s
           ref={ref}
           width={PREVIEW_W}
           height={H}
-          aria-label={`Preview of your Instagram ${f.label.toLowerCase()} with ${placements.length} ${placements.length === 1 ? 'strip' : 'strips'}`}
+          tabIndex={0}
+          role="application"
+          aria-label={label}
+          onKeyDown={onKeyDown}
           onContextMenu={(e) => e.preventDefault()}
           onPointerDown={(e) => {
             const pt = toNorm(e);
@@ -110,6 +133,9 @@ export default function SharePreview({ photos, stickers, settings, placements, s
           />
         )}
       </div>
+      <p className="sr-only" aria-live="polite">
+        {said}
+      </p>
     </div>
   );
 }
